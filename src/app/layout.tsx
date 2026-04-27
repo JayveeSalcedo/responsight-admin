@@ -4,7 +4,13 @@ import { ThemeProvider } from '@/components/ThemeProvider'
 
 export const metadata: Metadata = {
   title:       'ResponSight Admin',
-  description: 'Emergency Response Command Center',
+  description: 'Admin Emergency Reporting & Sentiment Analysis Dashboard for Urdaneta City',
+  icons: {
+    icon: [
+      { url: '/icon.png' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

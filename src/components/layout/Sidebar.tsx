@@ -102,6 +102,7 @@ export function Sidebar({ onNavigate, onCollapse }: { onNavigate?: () => void; o
     }
     return false
   })
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   function toggle() {
     const next = !collapsed
@@ -197,7 +198,7 @@ export function Sidebar({ onNavigate, onCollapse }: { onNavigate?: () => void; o
           )}
 
           <button
-            onClick={signOut}
+            onClick={() => setShowLogoutConfirm(true)}
             title="Sign out"
             className={cn(
               'flex items-center w-full rounded-lg text-sm text-text-secondary hover:text-status-critical hover:bg-status-critical/10 transition-all mb-1',
@@ -222,6 +223,44 @@ export function Sidebar({ onNavigate, onCollapse }: { onNavigate?: () => void; o
         }
       </button>
     </aside>
+
+    {/* Logout Confirmation Modal */}
+    {showLogoutConfirm && (
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+        <div 
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" 
+          onClick={() => setShowLogoutConfirm(false)} 
+        />
+        <div className="relative w-full max-w-sm bg-surface-card border border-surface-border rounded-2xl shadow-2xl overflow-hidden animate-scale-in">
+          <div className="p-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-status-critical/10 border border-status-critical/20 flex items-center justify-center mx-auto mb-4">
+              <LogOut className="w-6 h-6 text-status-critical" />
+            </div>
+            <h3 className="text-lg font-bold text-text-primary mb-2">Sign Out?</h3>
+            <p className="text-sm text-text-muted mb-6">
+              Are you sure you want to log out? You will need to sign in again to access the dashboard.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-surface-border text-sm font-semibold text-text-secondary hover:bg-surface-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowLogoutConfirm(false)
+                  signOut()
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-status-critical text-white text-sm font-semibold hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
     </>
   )
 }
