@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, AlertTriangle, Shield, Radio } from 'lucide-react'
@@ -39,7 +39,11 @@ export default function LoginPage() {
         : { data: null }
 
       const account = agencyAdmin ?? user
-      if (!account) { setError('Invalid email or password'); return }
+      if (!account) {
+        setError('Invalid email or password')
+        setLoading(false)
+        return
+      }
 
       // 2. Verify password
       const { data: isValid, error: rpcError } = await supabase
@@ -48,7 +52,11 @@ export default function LoginPage() {
           password_hash: account.password_hash,
         })
 
-      if (rpcError || !isValid) { setError('Invalid email or password'); return }
+      if (rpcError || !isValid) {
+        setError('Invalid email or password')
+        setLoading(false)
+        return
+      }
 
       // 3. Store session
       localStorage.setItem('rs_user_id', account.id)
@@ -71,13 +79,18 @@ export default function LoginPage() {
       document.cookie = 'rs_authed=1; path=/; SameSite=Lax; max-age=86400'
 
       router.push('/dashboard')
+      // Note: We don't setLoading(false) here to keep the spinner visible during transition
     } catch (err) {
       setError('Something went wrong. Please try again.')
       console.error(err)
-    } finally {
       setLoading(false)
     }
   }
+
+  // Prefetch dashboard to make transition snappier
+  useEffect(() => {
+    router.prefetch('/dashboard')
+  }, [router])
 
   return (
     <div className="min-h-screen flex">
