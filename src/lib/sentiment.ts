@@ -11,7 +11,7 @@
  *   computeSentimentBatch(items)            — batch ML model call, lexicon fallback
  */
 
-import type { SentimentLabel, DetectedLanguage } from '@/types'
+import type { SentimentLabel, DetectedLanguage, ModelSentimentResult } from '@/types'
 
 // ─── Language detection (mirrors the Python heuristic) ───────────────────────
 
@@ -382,7 +382,7 @@ export function computeSentiment(rating: number, feedback: string | null): Senti
 // ─── Model-based analyser (calls FastAPI service) ────────────────────────────
 
 // ModelSentimentResult is defined in @/types — re-export for convenience
-export type { ModelSentimentResult } from '@/types'
+export type { ModelSentimentResult }
 
 export async function computeSentimentWithModel(
   rating: number,
