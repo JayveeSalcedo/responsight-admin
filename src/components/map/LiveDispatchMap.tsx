@@ -299,7 +299,7 @@ export default function LiveDispatchMap({
         if (!nextIds.has(id)) { marker.remove(); existing.delete(id) }
       })
 
-      incidents.forEach(inc => {
+      incidents.filter(inc => inc.latitude != null && inc.longitude != null).forEach(inc => {
         const isSelected = inc.id === selectedIncidentId
         const color      = severityColor[inc.severity] ?? '#6b7280'
         const isDark     = mapStyle === 'dark'
@@ -342,7 +342,7 @@ export default function LiveDispatchMap({
             offset: [0, -8], maxWidth: 240,
           }).setContent(popupHtml)
 
-          const marker = L.marker([inc.latitude, inc.longitude], { icon })
+          const marker = L.marker([inc.latitude as number, inc.longitude as number], { icon })
             .addTo(map).bindPopup(popup)
 
           marker.on('click',     () => { onSelectIncident(inc.id); marker.openPopup() })
