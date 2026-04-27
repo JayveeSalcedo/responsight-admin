@@ -8,13 +8,13 @@ import Image from 'next/image'
 
 export default function LoginPage() {
   const supabase = createClient()
-  const router   = useRouter()
+  const router = useRouter()
 
-  const [email, setEmail]       = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPw, setShowPw]     = useState(false)
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+  const [showPw, setShowPw] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,10 +32,10 @@ export default function LoginPage() {
       // 1b. Fall back to custom users table
       const { data: user } = !agencyAdmin
         ? await supabase
-            .from('users')
-            .select('id, email, role, password_hash, first_name, last_name')
-            .eq('email', email.trim().toLowerCase())
-            .maybeSingle()
+          .from('users')
+          .select('id, email, role, password_hash, first_name, last_name')
+          .eq('email', email.trim().toLowerCase())
+          .maybeSingle()
         : { data: null }
 
       const account = agencyAdmin ?? user
@@ -44,17 +44,17 @@ export default function LoginPage() {
       // 2. Verify password
       const { data: isValid, error: rpcError } = await supabase
         .rpc('verify_password', {
-          password:      password,
+          password: password,
           password_hash: account.password_hash,
         })
 
       if (rpcError || !isValid) { setError('Invalid email or password'); return }
 
       // 3. Store session
-      localStorage.setItem('rs_user_id',    account.id)
+      localStorage.setItem('rs_user_id', account.id)
       localStorage.setItem('rs_user_email', account.email)
-      localStorage.setItem('rs_user_name',  `${account.first_name} ${account.last_name}`)
-      localStorage.setItem('rs_user_role',  agencyAdmin ? 'agency_admin' : (user as any)?.role ?? 'admin')
+      localStorage.setItem('rs_user_name', `${account.first_name} ${account.last_name}`)
+      localStorage.setItem('rs_user_role', agencyAdmin ? 'agency_admin' : (user as any)?.role ?? 'admin')
       if (agencyAdmin?.agency_id) {
         localStorage.setItem('rs_agency_id', agencyAdmin.agency_id)
         const { data: agencyData } = await supabase
@@ -85,16 +85,16 @@ export default function LoginPage() {
       {/* ── Left panel — city hall background ─────────────────────────────── */}
       <div className="hidden lg:flex lg:w-[58%] relative overflow-hidden">
 
-        {/* Background image — drop urdaneta-city-hall.jpg into /public/images/ */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-          style={{ backgroundImage: "url('/images/urdaneta-city-hall.jpg')" }}
-        />
-
         {/* Fallback gradient shown when image is missing */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#0a1628] via-[#0d2142] to-[#091533]" />
+        {/* Background image — urdaneta-city-hall.png in /public/images/ */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/images/urdaneta-city-hall.png')" }}
+        />
 
         {/* Dark overlay for text legibility */}
+        <div className="absolute inset-0 bg-black/40" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/10" />
 
         {/* Subtle grid overlay */}
@@ -115,13 +115,13 @@ export default function LoginPage() {
             />
             <div>
               <p className="text-white font-bold text-lg leading-none tracking-tight">ResponSight</p>
-              <p className="text-white/50 text-xs">Emergency Response System</p>
+              <p className="text-white/50 text-xs">Admin Emergency Reporting & Sentiment Analysis Dashboard</p>
             </div>
           </div>
 
           {/* Middle — headline */}
           <div className="max-w-md">
-            
+
             <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4">
               City of Urdaneta<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-brand-300">
@@ -129,15 +129,14 @@ export default function LoginPage() {
               </span>
             </h1>
             <p className="text-white/60 text-sm leading-relaxed">
-              Unified emergency response management for CDRRMO, BFP, and PNP.
-              Real-time dispatch, incident tracking, and community safety.
+              A centralized system for tracking public incident reports and analyzing community sentiment to improve emergency response coordination.
             </p>
 
             {/* Stats row */}
             <div className="flex items-center gap-6 mt-8">
               {[
                 { icon: Shield, label: '3 Agencies', sub: 'Connected' },
-                { icon: Radio,  label: 'Live Dispatch', sub: 'Real-time' },
+                { icon: Radio, label: 'Live Dispatch', sub: 'Real-time' },
               ].map(({ icon: Icon, label, sub }) => (
                 <div key={label} className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
