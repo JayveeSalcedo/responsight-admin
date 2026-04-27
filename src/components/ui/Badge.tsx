@@ -19,6 +19,12 @@ const sentimentMap: Record<SentimentLabel, string> = {
   positive: 'bg-green-500/15  text-green-400  border-green-500/30',
   neutral:  'bg-blue-500/15   text-blue-400   border-blue-500/30',
   negative: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+  joy:      'bg-green-500/15  text-green-400  border-green-500/30',
+  sadness:  'bg-blue-500/15   text-blue-400   border-blue-500/30',
+  anger:    'bg-orange-500/15 text-orange-400 border-orange-500/30',
+  fear:     'bg-violet-500/15    text-violet-400    border-violet-500/30',
+  disgust:  'bg-orange-500/15 text-orange-400 border-orange-500/30',
+  surprise: 'bg-blue-500/15   text-blue-400   border-blue-500/30',
   panic:    'bg-violet-500/15    text-violet-400    border-violet-500/30',
 }
 

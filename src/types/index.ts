@@ -5,7 +5,7 @@ export type IncidentType     = 'fire' | 'flood' | 'medical' | 'crime' | 'acciden
 export type ResponderStatus = 'available' | 'on_duty' | 'off_duty'
 export type AgencyType      = 'CDRRMO' | 'BFP' | 'PNP' | 'NDRRMC' | 'other'
 
-export type SentimentLabel = 'positive' | 'neutral' | 'negative' | 'joy' | 'sadness' | 'anger' | 'fear' | 'disgust' | 'surprise'
+export type SentimentLabel = 'positive' | 'neutral' | 'negative' | 'joy' | 'sadness' | 'anger' | 'fear' | 'disgust' | 'surprise' | 'panic'
 export type DetectedLanguage = 'english' | 'tagalog' | 'taglish'
 
 export interface ModelSentimentResult {

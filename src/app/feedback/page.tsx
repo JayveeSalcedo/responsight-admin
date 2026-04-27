@@ -46,10 +46,11 @@ const SENT_CFG: Record<SentimentLabel, { color: string; bg: string; border: stri
   fear:     { color: '#a855f7', bg: 'bg-purple-500/10',  border: 'border-purple-500/20',  label: 'Fear',     emoji: '😨', group: 'emotion' },
   disgust:  { color: '#84cc16', bg: 'bg-lime-500/10',    border: 'border-lime-500/20',    label: 'Disgust',  emoji: '🤢', group: 'emotion' },
   surprise: { color: '#f472b6', bg: 'bg-pink-500/10',    border: 'border-pink-500/20',    label: 'Surprise', emoji: '😲', group: 'emotion' },
+  panic:    { color: '#ef4444', bg: 'bg-red-500/10',     border: 'border-red-500/20',     label: 'Panic',    emoji: '🚨', group: 'emotion' },
 }
 
 const VALENCE_LABELS:  SentimentLabel[] = ['positive', 'neutral', 'negative']
-const EMOTION_LABELS:  SentimentLabel[] = ['joy', 'sadness', 'anger', 'fear', 'disgust', 'surprise']
+const EMOTION_LABELS:  SentimentLabel[] = ['joy', 'sadness', 'anger', 'fear', 'disgust', 'surprise', 'panic']
 const ALL_LABELS:      SentimentLabel[] = [...VALENCE_LABELS, ...EMOTION_LABELS]
 
 const AGENCY_CFG: Record<string, { color: string; bg: string; logo: string }> = {
