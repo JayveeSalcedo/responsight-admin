@@ -1,0 +1,61 @@
+services:
+  # ── Sentiment Analysis Microservice ───────────────────────────────────────
+  - type: web
+    name: responsight-sentiment
+    runtime: python
+    rootDir: sentiment_service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+
+    # Persist the HuggingFace model cache between deploys so the 1.5GB
+    # models are only downloaded once, not on every cold start.
+    disk:
+      name: hf-model-cache
+      mountPath: /opt/render/project/.cache
+      sizeGB: 5
+
+    envVars:
+      # Point HuggingFace to the persistent disk so models survive redeploys
+      - key: HF_HOME
+        value: /opt/render/project/.cache/huggingface
+      - key: TRANSFORMERS_CACHE
+        value: /opt/render/project/.cache/huggingface
+      # Allow requests from your Vercel domain (set this after deploying Next.js)
+      - key: ALLOWED_ORIGIN
+        value: https://your-vercel-app.vercel.app
+
+  # ── Next.js Admin Dashboard ────────────────────────────────────────────────
+  - type: web
+    name: responsight-admin
+    runtime: node
+    rootDir: .
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    plan: free
+
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false          # Render will prompt you to fill this in the dashboard
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_GROQ_API_KEY
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false          # Set to your Render URL after first deploy
+      - key: SENTIMENT_API_URL
+        sync: false          # Set to your Render sentiment service URL after it deploys

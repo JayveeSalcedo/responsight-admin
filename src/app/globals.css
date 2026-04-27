@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fonts loaded via <link> in layout.tsx (faster than CSS @import) */
+/* Leaflet CSS loaded only in map components via dynamic import */
+
+:root {
+  --font-syne:       'Poppins', sans-serif;
+  --font-geist-mono: 'JetBrains Mono', monospace;
+
+  /* Dark mode (default) */
+  --bg-surface:       #0d0f14;
+  --bg-card:          #13161e;
+  --bg-muted:         #252a38;
+  --bg-border:        #1e2330;
+  --text-primary:     #f0f2f8;
+  --text-secondary:   #8b93a8;
+  --text-muted:       #4d566b;
+  --glass-bg:         rgba(19, 22, 30, 0.8);
+  --scrollbar-track:  #13161e;
+  --scrollbar-thumb:  #1e2330;
+  --scrollbar-hover:  #252a38;
+}
+
+/* Light mode overrides */
+html.light {
+  --bg-surface:       #f0f1f5;
+  --bg-card:          #f8f9fb;
+  --bg-muted:         #eceef3;
+  --bg-border:        #dde0e8;
+  --text-primary:     #181a22;
+  --text-secondary:   #525a6e;
+  --text-muted:       #8e97aa;
+  --glass-bg:         rgba(248, 249, 251, 0.90);
+  --scrollbar-track:  #f0f1f5;
+  --scrollbar-thumb:  #cdd0d9;
+  --scrollbar-hover:  #b4b9c6;
+}
+
+/* Leaflet divIcon reset — must load before Leaflet renders markers */
+.leaflet-div-icon-clean {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+/* Ensure Leaflet panes never bleed above app modals.
+   Leaflet's own panes go up to z-index ~650; modals use z-50 (50) by default
+   which is far too low. We push Leaflet's stack down so z-50 wins. */
+.leaflet-pane         { z-index: 400 !important; }
+.leaflet-tile-pane    { z-index: 200 !important; }
+.leaflet-overlay-pane { z-index: 400 !important; }
+.leaflet-shadow-pane  { z-index: 500 !important; }
+.leaflet-marker-pane  { z-index: 600 !important; }
+.leaflet-tooltip-pane { z-index: 650 !important; }
+.leaflet-popup-pane   { z-index: 700 !important; }
+.leaflet-top,
+.leaflet-bottom       { z-index: 800 !important; }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--bg-surface);
+  color:            var(--text-primary);
+  font-family:      var(--font-syne);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+
+/* Selection */
+::selection { background: #f83b3b30; color: var(--text-primary); }
+
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(135deg, #ff6b6b 0%, #f83b3b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .glass {
+    background: var(--glass-bg);
+    border:     1px solid var(--bg-border);
+    /* backdrop-filter removed — triggers GPU compositing on every card */
+  }
+
+  .glow-red {
+    box-shadow: 0 0 20px rgba(248, 59, 59, 0.15);
+  }
+
+  .status-dot {
+    @apply w-2 h-2 rounded-full inline-block;
+  }
+
+  /* Theme-aware surface colors via CSS vars */
+  .bg-surface       { background-color: var(--bg-surface) !important; }
+  .bg-surface-card  { background-color: var(--bg-card)    !important; }
+  .bg-surface-muted { background-color: var(--bg-muted)   !important; }
+  .border-surface-border { border-color: var(--bg-border) !important; }
+  .text-text-primary     { color: var(--text-primary)     !important; }
+  .text-text-secondary   { color: var(--text-secondary)   !important; }
+  .text-text-muted       { color: var(--text-muted)       !important; }
+}
