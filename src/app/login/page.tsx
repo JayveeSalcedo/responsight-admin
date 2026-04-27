@@ -22,23 +22,18 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      // 1a. Check agency_admins table first
-      const { data: agencyAdmin } = await supabase
-        .from('agency_admins')
-        .select('id, email, password_hash, first_name, last_name, agency_id')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle()
+      const emailLower = email.trim().toLowerCase()
 
-      // 1b. Fall back to custom users table
-      const { data: user } = !agencyAdmin
-        ? await supabase
-          .from('users')
-          .select('id, email, role, password_hash, first_name, last_name')
-          .eq('email', email.trim().toLowerCase())
-          .maybeSingle()
-        : { data: null }
+      // 1. Check both tables in parallel
+      const [agencyRes, userRes] = await Promise.all([
+        supabase.from('agency_admins').select('id, email, password_hash, first_name, last_name, agency_id').eq('email', emailLower).maybeSingle(),
+        supabase.from('users').select('id, email, role, password_hash, first_name, last_name').eq('email', emailLower).maybeSingle()
+      ])
 
+      const agencyAdmin = agencyRes.data
+      const user = userRes.data
       const account = agencyAdmin ?? user
+
       if (!account) {
         setError('Invalid email or password')
         setLoading(false)
@@ -63,8 +58,10 @@ export default function LoginPage() {
       localStorage.setItem('rs_user_email', account.email)
       localStorage.setItem('rs_user_name', `${account.first_name} ${account.last_name}`)
       localStorage.setItem('rs_user_role', agencyAdmin ? 'agency_admin' : (user as any)?.role ?? 'admin')
+
       if (agencyAdmin?.agency_id) {
         localStorage.setItem('rs_agency_id', agencyAdmin.agency_id)
+        // Fetch agency type (we could parallelize this with verify_password, but we need account first)
         const { data: agencyData } = await supabase
           .from('agencies')
           .select('type')
@@ -79,7 +76,6 @@ export default function LoginPage() {
       document.cookie = 'rs_authed=1; path=/; SameSite=Lax; max-age=86400'
 
       router.push('/dashboard')
-      // Note: We don't setLoading(false) here to keep the spinner visible during transition
     } catch (err) {
       setError('Something went wrong. Please try again.')
       console.error(err)
