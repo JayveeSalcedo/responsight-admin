@@ -367,7 +367,7 @@ export default function LiveDispatchMap({
   useEffect(() => {
     if (!selectedIncidentId || !mapRef.current || !mapReady) return
     const i = incidents.find(i => i.id === selectedIncidentId)
-    if (i) mapRef.current.panTo([i.latitude, i.longitude], { animate: true })
+    if (i && i.latitude != null && i.longitude != null) mapRef.current.panTo([i.latitude, i.longitude], { animate: true })
   }, [selectedIncidentId, mapReady])
 
   return (
