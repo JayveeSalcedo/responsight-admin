@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, AlertTriangle, Shield, Radio } from 'lucide-react'
@@ -22,23 +22,24 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const emailLower = email.trim().toLowerCase()
+      // 1a. Check agency_admins table first
+      const { data: agencyAdmin } = await supabase
+        .from('agency_admins')
+        .select('id, email, password_hash, first_name, last_name, agency_id')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle()
 
-      // 1. Check both tables in parallel
-      const [agencyRes, userRes] = await Promise.all([
-        supabase.from('agency_admins').select('id, email, password_hash, first_name, last_name, agency_id').eq('email', emailLower).maybeSingle(),
-        supabase.from('users').select('id, email, role, password_hash, first_name, last_name').eq('email', emailLower).maybeSingle()
-      ])
+      // 1b. Fall back to custom users table
+      const { data: user } = !agencyAdmin
+        ? await supabase
+          .from('users')
+          .select('id, email, role, password_hash, first_name, last_name')
+          .eq('email', email.trim().toLowerCase())
+          .maybeSingle()
+        : { data: null }
 
-      const agencyAdmin = agencyRes.data
-      const user = userRes.data
       const account = agencyAdmin ?? user
-
-      if (!account) {
-        setError('Invalid email or password')
-        setLoading(false)
-        return
-      }
+      if (!account) { setError('Invalid email or password'); return }
 
       // 2. Verify password
       const { data: isValid, error: rpcError } = await supabase
@@ -47,21 +48,15 @@ export default function LoginPage() {
           password_hash: account.password_hash,
         })
 
-      if (rpcError || !isValid) {
-        setError('Invalid email or password')
-        setLoading(false)
-        return
-      }
+      if (rpcError || !isValid) { setError('Invalid email or password'); return }
 
       // 3. Store session
       localStorage.setItem('rs_user_id', account.id)
       localStorage.setItem('rs_user_email', account.email)
       localStorage.setItem('rs_user_name', `${account.first_name} ${account.last_name}`)
       localStorage.setItem('rs_user_role', agencyAdmin ? 'agency_admin' : (user as any)?.role ?? 'admin')
-
       if (agencyAdmin?.agency_id) {
         localStorage.setItem('rs_agency_id', agencyAdmin.agency_id)
-        // Fetch agency type (we could parallelize this with verify_password, but we need account first)
         const { data: agencyData } = await supabase
           .from('agencies')
           .select('type')
@@ -79,14 +74,10 @@ export default function LoginPage() {
     } catch (err) {
       setError('Something went wrong. Please try again.')
       console.error(err)
+    } finally {
       setLoading(false)
     }
   }
-
-  // Prefetch dashboard to make transition snappier
-  useEffect(() => {
-    router.prefetch('/dashboard')
-  }, [router])
 
   return (
     <div className="min-h-screen flex">
