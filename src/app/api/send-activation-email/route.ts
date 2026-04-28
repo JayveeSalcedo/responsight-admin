@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Build activation URL ─────────────────────────────────────────────────
-    const baseUrl       = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const baseUrl       = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').trim().replace(/\/+$/, '')
     const activationUrl = `${baseUrl}/activate?token=${token}`
 
     // ── Send email ───────────────────────────────────────────────────────────
