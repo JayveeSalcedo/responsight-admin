@@ -49,7 +49,7 @@ function timeAgo(dateStr: string) {
 
 function responderIconHtml(r: ResponderLocation, isSelected: boolean) {
   const isOnScene = r.responder_status === 'on_scene'
-  const color     = isOnScene ? '#f97316' : '#22c55e'
+  const color     = isOnScene ? '#8b5cf6' : '#06b6d4'
   const size      = isSelected ? 48 : 38
 
   return `
@@ -182,7 +182,9 @@ export default function LiveDispatchMap({
       mapRef.current = map
       // invalidateSize fixes the black-box / tile-gap bug that happens when
       // the container is measured before CSS finishes painting.
-      setTimeout(() => map.invalidateSize(), 150)
+      setTimeout(() => {
+        if (mapRef.current) map.invalidateSize()
+      }, 150)
       // Signal that the map instance is ready so marker effects can run
       setMapReady(true)
     })
@@ -231,7 +233,7 @@ export default function LiveDispatchMap({
 
       responders.forEach(r => {
         const isSelected = r.responder_id === selectedResponderId
-        const color      = r.responder_status === 'on_scene' ? '#f97316' : '#22c55e'
+        const color      = r.responder_status === 'on_scene' ? '#8b5cf6' : '#06b6d4'
         const isDark     = mapStyle === 'dark'
         const bg         = isDark ? '#13161e' : '#ffffff'
         const text       = isDark ? '#f0f2f8' : '#1a1a2e'
@@ -250,7 +252,7 @@ export default function LiveDispatchMap({
             <div style="padding:10px 12px;border-bottom:1px solid ${brd};">
               <div style="font-size:13px;font-weight:700;">${r.first_name} ${r.last_name}</div>
               <div style="font-size:10px;margin-top:3px;color:${color};font-weight:600;text-transform:uppercase;">
-                ${r.responder_status === 'on_scene' ? '🟠 On Scene' : '🟢 Online'}
+                ${r.responder_status === 'on_scene' ? '🟣 On Scene' : '🔵 Online'}
               </div>
             </div>
             <div style="padding:8px 12px;font-size:11px;color:${subtext};line-height:1.8;">

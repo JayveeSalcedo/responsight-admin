@@ -915,14 +915,14 @@ export default function IncidentsPage() {
                   <span className="text-[10px] text-text-muted">Updated {secsSince}s ago</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-sm font-bold text-green-400">{onlineCount}</span>
+                  <div className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-3 py-2">
+                    <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+                    <span className="text-sm font-bold text-cyan-400">{onlineCount}</span>
                     <span className="text-[10px] text-text-muted">Online</span>
                   </div>
-                  <div className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 rounded-lg px-3 py-2">
-                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-                    <span className="text-sm font-bold text-orange-400">{onSceneCount}</span>
+                  <div className="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-lg px-3 py-2">
+                    <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" />
+                    <span className="text-sm font-bold text-violet-400">{onSceneCount}</span>
                     <span className="text-[10px] text-text-muted">On Scene</span>
                   </div>
                 </div>
@@ -950,12 +950,12 @@ export default function IncidentsPage() {
                           <div className="w-8 h-8 rounded-full bg-brand-600/15 border border-brand-600/20 flex items-center justify-center text-brand-400 font-bold text-xs">
                             {r.first_name[0]}{r.last_name[0]}
                           </div>
-                          <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-card ${isOnScene ? 'bg-orange-500' : 'bg-green-500'}`} />
+                          <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-card ${isOnScene ? 'bg-violet-500' : 'bg-cyan-500'}`} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-text-primary truncate">{r.first_name} {r.last_name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className={`text-[10px] font-medium ${isOnScene ? 'text-orange-400' : 'text-green-400'}`}>{isOnScene ? 'On Scene' : 'Online'}</span>
+                            <span className={`text-[10px] font-medium ${isOnScene ? 'text-violet-400' : 'text-cyan-400'}`}>{isOnScene ? 'On Scene' : 'Online'}</span>
                             {r.speed != null && r.speed > 1 && <span className="text-[10px] text-text-muted">· {Math.round(r.speed)} km/h</span>}
                           </div>
                         </div>
@@ -1014,7 +1014,7 @@ export default function IncidentsPage() {
                   </div>
                   <div className="space-y-1 text-[11px] text-text-secondary">
                     <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${selResponder.responder_status === 'on_scene' ? 'bg-orange-500' : 'bg-green-500'}`} />
+                      <span className={`w-2 h-2 rounded-full ${selResponder.responder_status === 'on_scene' ? 'bg-violet-500' : 'bg-cyan-500'}`} />
                       {selResponder.responder_status === 'on_scene' ? 'On Scene' : 'Online'}
                     </div>
                     {selResponder.speed != null && (
@@ -1052,8 +1052,8 @@ export default function IncidentsPage() {
               <div className="absolute top-3 right-3 glass rounded-lg p-3 z-[999] text-[10px] space-y-2 min-w-[120px]">
                 <p className="text-text-muted font-semibold uppercase tracking-wider">Legend</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 text-text-secondary"><span className="w-3 h-3 rounded-full bg-green-500 shrink-0" />Online</div>
-                  <div className="flex items-center gap-2 text-text-secondary"><span className="w-3 h-3 rounded-full bg-orange-500 shrink-0" />On Scene</div>
+                  <div className="flex items-center gap-2 text-text-secondary"><span className="w-3 h-3 rounded-full bg-cyan-500 shrink-0" />Online</div>
+                  <div className="flex items-center gap-2 text-text-secondary"><span className="w-3 h-3 rounded-full bg-violet-500 shrink-0" />On Scene</div>
                 </div>
                 <div className="border-t border-surface-border pt-2 space-y-1.5">
                   {[['urgent','#ef4444'],['high','#f97316'],['medium','#eab308'],['low','#22c55e']].map(([l,c]) => (
