@@ -12,7 +12,7 @@ import { format, subDays, startOfDay, addDays, differenceInDays, endOfDay } from
 import {
   Sparkles, X, Loader2, MapPin, ChevronDown,
   Clock, FileDown, Check, Upload, Database, BarChart2, Map as MapIcon, BarChart as BarChartIcon,
-  Trash2,
+  Trash2, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarDays,
 } from 'lucide-react'
 import { BARANGAYS } from '@/lib/constants'
 import dynamic from 'next/dynamic'
@@ -241,6 +241,203 @@ function isUrdanetaData(locations: string[]): boolean {
   const barangaySet = new Set(BARANGAYS.map(b => b.toLowerCase()))
   const matched = locations.filter(l => barangaySet.has(l.toLowerCase())).length
   return matched / locations.length >= 0.5
+}
+
+// ─── Alert Banners ───────────────────────────────────────────────────────────
+
+interface AlertBanner {
+  level: 'critical' | 'warning' | 'info'
+  message: string
+  detail?: string
+}
+
+function AlertBanners({ alerts }: { alerts: AlertBanner[] }) {
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set())
+  const visible = alerts.filter((_, i) => !dismissed.has(i))
+  if (visible.length === 0) return null
+  return (
+    <div className="space-y-2 mb-5">
+      {alerts.map((alert, i) => {
+        if (dismissed.has(i)) return null
+        const colors = {
+          critical: 'bg-red-500/10 border-red-500/30 text-red-400',
+          warning: 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
+          info: 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+        }[alert.level]
+        return (
+          <div key={i} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border text-xs font-medium ${colors}`}>
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <span className="flex-1">{alert.message}{alert.detail && <span className="font-normal opacity-75"> — {alert.detail}</span>}</span>
+            <button onClick={() => setDismissed(prev => new Set([...prev, i]))} className="opacity-50 hover:opacity-100 transition-opacity"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Focus Period Presets ─────────────────────────────────────────────────────
+
+type PresetKey = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom'
+
+interface FocusPreset {
+  key: PresetKey
+  label: string
+  start: string
+  end: string
+}
+
+function getFocusPresets(): FocusPreset[] {
+  const today = new Date()
+  const fmt = (d: Date) => format(d, 'yyyy-MM-dd')
+  return [
+    { key: 'today', label: 'Today', start: fmt(today), end: fmt(today) },
+    { key: 'yesterday', label: 'Yesterday', start: fmt(subDays(today, 1)), end: fmt(subDays(today, 1)) },
+    { key: '7d', label: 'Last 7d', start: fmt(subDays(today, 6)), end: fmt(today) },
+    { key: '30d', label: 'Last 30d', start: fmt(subDays(today, 29)), end: fmt(today) },
+    { key: 'month', label: 'This Month', start: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), end: fmt(today) },
+  ]
+}
+
+function FocusPeriodBar({
+  dateRange,
+  onChange,
+  trendData,
+}: {
+  dateRange: { start: string; end: string }
+  onChange: (r: { start: string; end: string }) => void
+  trendData: any[]
+}) {
+  const [showCustom, setShowCustom] = useState(false)
+  const presets = getFocusPresets()
+
+  // Compute total incidents per preset period for spike detection
+  const totalByPreset = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const p of presets) {
+      const start = new Date(p.start); const end = new Date(p.end)
+      out[p.key] = trendData.filter(d => {
+        const dt = new Date(d.day ?? d.date)
+        return dt >= start && dt <= end
+      }).reduce((s, d) => s + (d.fire ?? 0) + (d.flood ?? 0) + (d.accident ?? 0) + (d.medical ?? 0) + (d.crime ?? 0) + (d.other ?? 0), 0)
+    }  
+    return out
+  }, [trendData])
+
+  const sevenDayTotal = totalByPreset['7d'] ?? 0
+  const thirtyDayAvgWeek = totalByPreset['30d'] ? totalByPreset['30d'] / 4 : 0
+  function spikeLevel(key: PresetKey): 'critical' | 'warning' | null {
+    if (key === '7d' && thirtyDayAvgWeek > 0) {
+      const ratio = sevenDayTotal / thirtyDayAvgWeek
+      if (ratio >= 1.5) return 'critical'
+      if (ratio >= 1.2) return 'warning'
+    }
+    return null
+  }
+
+  const activeKey = presets.find(p => p.start === dateRange.start && p.end === dateRange.end)?.key ?? 'custom'
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {presets.map(p => {
+        const spike = spikeLevel(p.key)
+        const isActive = activeKey === p.key
+        const spikeColor = spike === 'critical' ? 'text-red-400 border-red-500/50 bg-red-500/10' : spike === 'warning' ? 'text-yellow-400 border-yellow-500/50 bg-yellow-500/10' : ''
+        return (
+          <button
+            key={p.key}
+            onClick={() => { onChange({ start: p.start, end: p.end }); setShowCustom(false) }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all
+              ${ isActive ? 'bg-brand-600/20 border-brand-500/50 text-brand-300' : spike ? spikeColor : 'border-surface-border text-text-muted hover:text-text-secondary hover:border-brand-500/30' }`}
+          >
+            {p.label}
+            {spike && !isActive && (
+              <span className={`text-[10px] font-bold ${spike === 'critical' ? 'text-red-400' : 'text-yellow-400'}`}>
+                {spike === 'critical' ? '🔴' : '🟡'}
+              </span>
+            )}
+          </button>
+        )
+      })}
+      {/* Custom toggle */}
+      <button
+        onClick={() => setShowCustom(v => !v)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all
+          ${ activeKey === 'custom' ? 'bg-brand-600/20 border-brand-500/50 text-brand-300' : 'border-surface-border text-text-muted hover:text-text-secondary' }`}
+      >
+        <CalendarDays className="w-3.5 h-3.5" /> Custom
+      </button>
+      {(showCustom || activeKey === 'custom') && (
+        <div className="flex items-center gap-1.5">
+          <input type="date" value={dateRange.start}
+            onChange={e => onChange({ ...dateRange, start: e.target.value })}
+            className="px-2 py-1.5 rounded-lg text-xs font-medium border border-surface-border bg-surface-muted text-text-secondary focus:outline-none focus:border-brand-500/50" />
+          <span className="text-text-muted text-xs">to</span>
+          <input type="date" value={dateRange.end}
+            onChange={e => onChange({ ...dateRange, end: e.target.value })}
+            className="px-2 py-1.5 rounded-lg text-xs font-medium border border-surface-border bg-surface-muted text-text-secondary focus:outline-none focus:border-brand-500/50" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── YoY Comparison Card ──────────────────────────────────────────────────────
+
+function YoYComparisonCard({ datasets }: { datasets: YearDataset[] }) {
+  const comparisons = useMemo(() => {
+    // Find the two most recent years present for each type
+    const byType = new Map<IncidentType, Map<string, number>>()
+    for (const d of datasets) {
+      if (!byType.has(d.incidentType)) byType.set(d.incidentType, new Map())
+      byType.get(d.incidentType)!.set(d.year, d.grandTotal)
+    }
+    const results: { type: IncidentType; fromYear: string; toYear: string; from: number; to: number; pct: number }[] = []
+    byType.forEach((yearMap, type) => {
+      const years = [...yearMap.keys()].sort()
+      if (years.length < 2) return
+      const toYear = years[years.length - 1]
+      const fromYear = years[years.length - 2]
+      const from = yearMap.get(fromYear)!
+      const to = yearMap.get(toYear)!
+      if (from === 0) return
+      const pct = Math.round(((to - from) / from) * 100)
+      results.push({ type, fromYear, toYear, from, to, pct })
+    })
+    return results.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
+  }, [datasets])
+
+  if (comparisons.length === 0) return null
+
+  return (
+    <div className="glass rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="text-sm font-semibold text-text-primary">Year-over-Year Comparison</h2>
+        <span className="text-xs text-text-muted">Latest two years per type</span>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        {comparisons.map(({ type, fromYear, toYear, from, to, pct }) => {
+          const up = pct > 0
+          const neutral = pct === 0
+          const color = neutral ? 'text-text-muted' : up ? 'text-red-400' : 'text-green-400'
+          const bg = neutral ? 'border-surface-border' : up ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'
+          return (
+            <div key={type} className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${bg} min-w-[200px] flex-1`}>
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: TYPE_COLOR[type] }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-text-primary">{TYPE_LABEL[type]}</p>
+                <p className="text-[10px] text-text-muted">{fromYear} → {toYear}: {from.toLocaleString()} → {to.toLocaleString()}</p>
+              </div>
+              <div className={`flex items-center gap-1 text-sm font-bold ${color}`}>
+                {neutral ? <Minus className="w-3.5 h-3.5" /> : up ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                {neutral ? '0%' : `${up ? '+' : ''}${pct}%`}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 // ─── AI Narrative modal ───────────────────────────────────────────────────────
@@ -1114,6 +1311,9 @@ function DatasetTab() {
         </div>
       </div>
 
+      {/* YoY Comparison Card */}
+      <YoYComparisonCard datasets={activeDatasets} />
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <div className="glass rounded-xl p-4 col-span-2 md:col-span-1">
@@ -1280,7 +1480,7 @@ function InAppTab() {
   const [allReports, setAllReports] = useState<RawReport[]>([])
   const [loading, setLoading] = useState(true)
   const [barangay, setBarangay] = useState<string | null>(null)
-  const [dateRange, setDateRange] = useState({ start: format(subDays(new Date(), 7), 'yyyy-MM-dd'), end: format(new Date(), 'yyyy-MM-dd') })
+  const [dateRange, setDateRange] = useState({ start: format(subDays(new Date(), 6), 'yyyy-MM-dd'), end: format(new Date(), 'yyyy-MM-dd') })
   const [modal, setModal] = useState<ChartKey | null>(null)
   const [showExport, setShowExport] = useState(false)
   const [hotspotView, setHotspotView] = useState<'map' | 'chart'>('map')
@@ -1347,6 +1547,49 @@ function InAppTab() {
   }, [allReports, dateRange])
 
   const overallAvgRt = useMemo(() => { const valid = allReports.filter(r => r.response_time_minutes != null); if (!valid.length) return null; return Math.round(valid.reduce((s, r) => s + r.response_time_minutes!, 0) / valid.length * 10) / 10 }, [allReports])
+
+  // ── Alert banners ───────────────────────────────────────────────────────────
+  const alertBanners = useMemo((): AlertBanner[] => {
+    const alerts: AlertBanner[] = []
+    // 1. Response time spike: today vs overall avg
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+    const todayRt = respTimeData.find(d => d.date === format(new Date(), 'MMM d'))
+    if (todayRt?.avg != null && overallAvgRt != null && todayRt.avg > overallAvgRt * 2) {
+      alerts.push({ level: 'critical', message: `Response time spiked to ${todayRt.avg} min today`, detail: `${Math.round(todayRt.avg / overallAvgRt)}× above the overall avg of ${overallAvgRt} min` })
+    } else if (todayRt?.avg != null && overallAvgRt != null && todayRt.avg > overallAvgRt * 1.4) {
+      alerts.push({ level: 'warning', message: `Response time elevated at ${todayRt.avg} min today`, detail: `Avg is ${overallAvgRt} min` })
+    }
+    // 2. Type spike: last 7d vs prior 7d
+    const now = new Date()
+    const last7Start = startOfDay(subDays(now, 6))
+    const prior7Start = startOfDay(subDays(now, 13))
+    const prior7End = endOfDay(subDays(now, 7))
+    const typeCounts7: Record<string, number> = {}
+    const typeCountsPrior: Record<string, number> = {}
+    allReports.forEach(r => {
+      const d = new Date(r.created_at)
+      const t = (r.incident_type || 'other').toLowerCase()
+      if (d >= last7Start) typeCounts7[t] = (typeCounts7[t] ?? 0) + 1
+      if (d >= prior7Start && d <= prior7End) typeCountsPrior[t] = (typeCountsPrior[t] ?? 0) + 1
+    })
+    for (const [type, count] of Object.entries(typeCounts7)) {
+      const prev = typeCountsPrior[type] ?? 0
+      if (prev > 0 && count / prev >= 1.6) {
+        alerts.push({ level: 'warning', message: `${TYPE_LABEL[type] ?? type} incidents up ${Math.round((count / prev - 1) * 100)}% vs prior 7 days`, detail: `${count} this week vs ${prev} last week` })
+      }
+    }
+    // 3. Unresolved hotspot barangay
+    const unresolved = allReports.filter(r => ['pending', 'accepted', 'en_route', 'arrived'].includes(r.status))
+    const unresByBrgy: Record<string, number> = {}
+    unresolved.forEach(r => { const b = extractBarangay(r.location); if (b) unresByBrgy[b] = (unresByBrgy[b] ?? 0) + 1 })
+    const topBrgy = Object.entries(unresByBrgy).sort((a, b) => b[1] - a[1])[0]
+    if (topBrgy && topBrgy[1] >= 5) {
+      alerts.push({ level: 'critical', message: `Brgy. ${topBrgy[0]} has ${topBrgy[1]} unresolved incidents`, detail: 'Requires immediate attention' })
+    } else if (topBrgy && topBrgy[1] >= 3) {
+      alerts.push({ level: 'warning', message: `Brgy. ${topBrgy[0]} has ${topBrgy[1]} unresolved incidents` })
+    }
+    return alerts
+  }, [allReports, respTimeData, overallAvgRt])
   const hotspotData = useMemo(() => { const counts: Record<string, number> = {}; allReports.forEach(r => { const b = extractBarangay(r.location); if (b) counts[b] = (counts[b] ?? 0) + 1 }); return Object.entries(counts).map(([barangay, count]) => ({ barangay, count })).sort((a, b) => b.count - a.count).slice(0, 12) }, [allReports])
 
   const choroplethIncidents = useMemo((): MapIncident[] => {
@@ -1374,17 +1617,15 @@ function InAppTab() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4 flex-wrap mb-5">
+      {/* Alert Banners */}
+      <AlertBanners alerts={alertBanners} />
+
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
         <div className="flex items-center gap-3 flex-wrap">
           <BarangayFilter counts={barangayCounts} value={barangay} onChange={setBarangay} />
           {barangay && (<><button onClick={() => setBarangay(null)} className="text-xs text-brand-400 hover:underline">Clear</button><span className="text-xs text-text-muted">{reports.length} of {allReports.length} incidents</span></>)}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <input type="date" value={dateRange.start} onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="px-2 py-1.5 rounded-lg text-xs font-medium border border-surface-border bg-surface-muted text-text-secondary focus:outline-none focus:border-brand-500/50" />
-            <span className="text-text-muted text-xs">to</span>
-            <input type="date" value={dateRange.end} onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="px-2 py-1.5 rounded-lg text-xs font-medium border border-surface-border bg-surface-muted text-text-secondary focus:outline-none focus:border-brand-500/50" />
-          </div>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border bg-green-500/10 border-green-500/20 text-green-400">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Live
           </div>
@@ -1393,6 +1634,9 @@ function InAppTab() {
           </button>
         </div>
       </div>
+
+      {/* Focus Period Presets */}
+      <FocusPeriodBar dateRange={dateRange} onChange={setDateRange} trendData={trendData} />
 
       <div ref={refTrend} className="glass rounded-xl p-5">
         <ChartHeader title="Incident Trend" subtitle={`${dateRange.start} to ${dateRange.end}${barangay ? ` · Brgy. ${barangay}` : ''}`} onInsights={() => setModal('trend')}>

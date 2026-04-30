@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const SENTIMENT_API = process.env.SENTIMENT_API_URL ?? 'http://localhost:8000'
+const SENTIMENT_API  = (process.env.SENTIMENT_API_URL  ?? 'http://localhost:8000').trim().replace(/\/+$/, '')
+const HF_TOKEN       = process.env.HF_TOKEN ?? ''
+
+function hfHeaders() {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (HF_TOKEN) h['Authorization'] = `Bearer ${HF_TOKEN}`
+  return h
+}
 
 // ── Single analysis ───────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -13,10 +20,10 @@ export async function POST(req: NextRequest) {
 
     const res = await fetch(`${SENTIMENT_API}${endpoint}`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: hfHeaders(),
       body:    JSON.stringify(body),
-      // 10s timeout — models can be slow on first inference after idle
-      signal:  AbortSignal.timeout(10_000),
+      // 30s timeout — HF Spaces free tier can take ~20s on cold start after idle
+      signal:  AbortSignal.timeout(30_000),
     })
 
     if (!res.ok) {
@@ -28,13 +35,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data)
   } catch (err: any) {
     // Service not running — return a clear error so the UI can fall back to lexicon
-    if (err?.name === 'TimeoutError' || err?.cause?.code === 'ECONNREFUSED') {
+    if (err?.name === 'TimeoutError' || err?.cause?.code === 'ECONNREFUSED' || err?.cause?.code === 'ENOTFOUND') {
       return NextResponse.json(
         { error: 'Sentiment service unavailable', offline: true },
         { status: 503 }
       )
     }
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+    console.error('[analyze-sentiment] Unexpected error:', err)
+    return NextResponse.json({ error: err.message ?? 'Unknown error', offline: true }, { status: 500 })
   }
 }
 
@@ -42,11 +50,13 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   try {
     const res = await fetch(`${SENTIMENT_API}/health`, {
-      signal: AbortSignal.timeout(3_000),
+      headers: HF_TOKEN ? { 'Authorization': `Bearer ${HF_TOKEN}` } : {},
+      signal: AbortSignal.timeout(15_000), // HF Spaces needs more time on cold start
     })
     const data = await res.json()
     return NextResponse.json({ ...data, url: SENTIMENT_API })
-  } catch {
+  } catch (err: any) {
+    console.error('[analyze-sentiment] Health check failed:', err?.message)
     return NextResponse.json({ status: 'offline', url: SENTIMENT_API }, { status: 503 })
   }
 }
