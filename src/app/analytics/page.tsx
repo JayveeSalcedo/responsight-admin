@@ -46,10 +46,25 @@ const TOOLTIP_STYLE = {
   borderRadius: '8px', color: '#e2e8f0', fontSize: '12px',
 }
 const LEGEND_STYLE = { fontSize: '11px', color: '#8892a4' }
+const TOOLTIP_LABEL_STYLE = { color: '#e2e8f0', fontWeight: 600 }
+const TOOLTIP_ITEM_STYLE  = { color: '#cbd5e1' }
+const TOOLTIP_CURSOR      = { fill: '#1e2330' }
+// Spread these onto every <Tooltip> directly — Recharts requires Tooltip to be
+// a real direct child of the chart component, so a wrapper breaks registration.
+const TOOLTIP_PROPS = {
+  contentStyle: TOOLTIP_STYLE,
+  labelStyle: TOOLTIP_LABEL_STYLE,
+  itemStyle: TOOLTIP_ITEM_STYLE,
+  cursor: TOOLTIP_CURSOR,
+} as const
 
 const STATUS_COLOR: Record<string, string> = {
+  // original statuses
   pending: '#eab308', accepted: '#3b82f6', en_route: '#06b6d4',
   arrived: '#a855f7', completed: '#22c55e', cancelled: '#6b7280', rejected: '#ef4444',
+  // alternate status strings used in DB
+  responding: '#06b6d4', resolved: '#22c55e', verified: '#a855f7',
+  dismissed: '#6b7280', failed: '#ef4444', active: '#3b82f6',
 }
 const TYPE_COLOR: Record<string, string> = {
   fire: '#f97316', flood: '#3b82f6', accident: '#eab308',
@@ -287,18 +302,6 @@ interface FocusPreset {
   end: string
 }
 
-function getFocusPresets(): FocusPreset[] {
-  const today = new Date()
-  const fmt = (d: Date) => format(d, 'yyyy-MM-dd')
-  return [
-    { key: 'today', label: 'Today', start: fmt(today), end: fmt(today) },
-    { key: 'yesterday', label: 'Yesterday', start: fmt(subDays(today, 1)), end: fmt(subDays(today, 1)) },
-    { key: '7d', label: 'Last 7d', start: fmt(subDays(today, 6)), end: fmt(today) },
-    { key: '30d', label: 'Last 30d', start: fmt(subDays(today, 29)), end: fmt(today) },
-    { key: 'month', label: 'This Month', start: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), end: fmt(today) },
-  ]
-}
-
 function FocusPeriodBar({
   dateRange,
   onChange,
@@ -309,7 +312,22 @@ function FocusPeriodBar({
   trendData: any[]
 }) {
   const [showCustom, setShowCustom] = useState(false)
-  const presets = getFocusPresets()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
+  // Compute presets on the client only (avoids SSR/client date mismatch → hydration error)
+  const presets = useMemo((): FocusPreset[] => {
+    if (!mounted) return []
+    const today = new Date()
+    const fmt = (d: Date) => format(d, 'yyyy-MM-dd')
+    return [
+      { key: 'today', label: 'Today', start: fmt(today), end: fmt(today) },
+      { key: 'yesterday', label: 'Yesterday', start: fmt(subDays(today, 1)), end: fmt(subDays(today, 1)) },
+      { key: '7d', label: 'Last 7d', start: fmt(subDays(today, 6)), end: fmt(today) },
+      { key: '30d', label: 'Last 30d', start: fmt(subDays(today, 29)), end: fmt(today) },
+      { key: 'month', label: 'This Month', start: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), end: fmt(today) },
+    ]
+  }, [mounted])
 
   // Compute total incidents per preset period for spike detection
   const totalByPreset = useMemo(() => {
@@ -1342,7 +1360,7 @@ function DatasetTab() {
             <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" />
             <XAxis dataKey="month" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={TOOLTIP_STYLE} />
+            <Tooltip {...TOOLTIP_PROPS} />
             <Legend wrapperStyle={LEGEND_STYLE} />
             {activeDatasets.map((d, dsIdx) => {
               const key = `${d.incidentType}_${d.year}`
@@ -1375,7 +1393,7 @@ function DatasetTab() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" vertical={false} />
                   <XAxis dataKey="type" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => TYPE_LABEL[v] ?? v} />
                   <YAxis tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: '#1e2330' }} />
+                  <Tooltip {...TOOLTIP_PROPS} />
                   <Bar dataKey="total" name="Incidents" radius={[4, 4, 0, 0]}>
                     {typeBreakdownData.map(d => <Cell key={d.type} fill={TYPE_COLOR[d.type] ?? TYPE_COLOR.other} />)}
                   </Bar>
@@ -1397,7 +1415,7 @@ function DatasetTab() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" vertical={false} />
                   <XAxis dataKey="year" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: '#1e2330' }} />
+                  <Tooltip {...TOOLTIP_PROPS} />
                   <Legend wrapperStyle={LEGEND_STYLE} />
                   {[...selectedTypes].map(type => (
                     <Bar key={type} dataKey={type} name={TYPE_LABEL[type]} fill={TYPE_COLOR[type]} radius={[3, 3, 0, 0]} />
@@ -1452,7 +1470,7 @@ function DatasetTab() {
               <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" horizontal={false} />
               <XAxis type="number" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="barangay" width={130} tick={{ fill: '#8892a4', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: '#1e2330' }} />
+              <Tooltip {...TOOLTIP_PROPS} />
               <Legend wrapperStyle={LEGEND_STYLE} />
               {activeDatasets.map((d) => {
                 const key = `${d.incidentType}_${d.year}`
@@ -1480,7 +1498,14 @@ function InAppTab() {
   const [allReports, setAllReports] = useState<RawReport[]>([])
   const [loading, setLoading] = useState(true)
   const [barangay, setBarangay] = useState<string | null>(null)
-  const [dateRange, setDateRange] = useState({ start: format(subDays(new Date(), 6), 'yyyy-MM-dd'), end: format(new Date(), 'yyyy-MM-dd') })
+  const [dateRange, setDateRange] = useState({ start: '', end: '' })
+  useEffect(() => {
+    setDateRange({
+      start: format(subDays(new Date(), 6), 'yyyy-MM-dd'),
+      end: format(new Date(), 'yyyy-MM-dd'),
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [modal, setModal] = useState<ChartKey | null>(null)
   const [showExport, setShowExport] = useState(false)
   const [hotspotView, setHotspotView] = useState<'map' | 'chart'>('map')
@@ -1661,7 +1686,7 @@ function InAppTab() {
               <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" />
               <XAxis dataKey="date" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip content={<CustomTooltip />} /><Legend wrapperStyle={LEGEND_STYLE} />
+              <Tooltip {...TOOLTIP_PROPS} content={<CustomTooltip />} /><Legend wrapperStyle={LEGEND_STYLE} />
               {(!trendType || trendType === 'fire') && <Area type="monotone" dataKey="fire" name="Fire" stroke="#ef4444" fill="url(#fire)" strokeWidth={2} dot={false} />}
               {(!trendType || trendType === 'flood') && <Area type="monotone" dataKey="flood" name="Flood" stroke="#3b82f6" fill="url(#flood)" strokeWidth={2} dot={false} />}
               {(!trendType || trendType === 'accident') && <Area type="monotone" dataKey="accident" name="Accident" stroke="#eab308" fill="url(#accident)" strokeWidth={2} dot={false} />}
@@ -1683,7 +1708,7 @@ function InAppTab() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" vertical={false} />
                   <XAxis dataKey="type" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e2330' }} /><Legend wrapperStyle={LEGEND_STYLE} />
+                  <Tooltip {...TOOLTIP_PROPS} content={<CustomTooltip />} />
                   <Bar dataKey="count" name="Incidents" radius={[4, 4, 0, 0]}>{typeData.map(d => <Cell key={d.type} fill={TYPE_COLOR[d.type] ?? TYPE_COLOR.other} />)}</Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -1698,7 +1723,7 @@ function InAppTab() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" vertical={false} />
                   <XAxis dataKey="status" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e2330' }} /><Legend wrapperStyle={LEGEND_STYLE} />
+                  <Tooltip {...TOOLTIP_PROPS} content={<CustomTooltip />} />
                   <Bar dataKey="count" name="Incidents" radius={[4, 4, 0, 0]}>{statusData.map(d => <Cell key={d.status} fill={STATUS_COLOR[d.status] ?? '#6b7280'} />)}</Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -1728,7 +1753,7 @@ function InAppTab() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" />
                   <XAxis dataKey="date" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} unit=" min" />
-                  <Tooltip content={<ResponseTimeTooltip />} /><Legend wrapperStyle={LEGEND_STYLE} />
+                  <Tooltip {...TOOLTIP_PROPS} content={<ResponseTimeTooltip />} /><Legend wrapperStyle={LEGEND_STYLE} />
                   <Area type="monotone" dataKey="avg" name="Avg response (min)" stroke="#06b6d4" fill="url(#rtGrad)" strokeWidth={2} dot={{ fill: '#06b6d4', r: 3 }} activeDot={{ r: 5 }} connectNulls />
                 </AreaChart>
               </ResponsiveContainer>
@@ -1767,7 +1792,7 @@ function InAppTab() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" horizontal={false} />
                   <XAxis type="number" tick={{ fill: '#4d566b', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <YAxis type="category" dataKey="barangay" width={110} tick={{ fill: '#8892a4', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `Brgy. ${v}`} />
-                  <Tooltip content={<CustomTooltip formatter={(v: any) => [`${v} incident${v !== 1 ? 's' : ''}`, 'Count']} />} cursor={{ fill: '#1e2330' }} />
+                  <Tooltip {...TOOLTIP_PROPS} content={<CustomTooltip formatter={(v: any) => [`${v} incident${v !== 1 ? 's' : ''}`, 'Count']} />} />
                   <Legend wrapperStyle={LEGEND_STYLE} payload={[{ value: '#1 Hotspot', type: 'square', color: '#ef4444' }, { value: 'Top 3', type: 'square', color: '#f97316' }, { value: 'Top 6', type: 'square', color: '#eab308' }, { value: 'Others', type: 'square', color: '#3b82f6' }]} />
                   <Bar dataKey="count" name="Incidents" radius={[0, 4, 4, 0]}>
                     {hotspotData.map((d, i) => <Cell key={d.barangay} fill={i === 0 ? '#ef4444' : i <= 2 ? '#f97316' : i <= 5 ? '#eab308' : '#3b82f6'} />)}

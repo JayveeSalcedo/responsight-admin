@@ -460,7 +460,9 @@ export async function computeSentimentBatch(
     return { ...base, source: 'lexicon' as const, emotion: base.label, emotion_score: base.confidence, valence: 'neutral', valence_score: 0.5, all_emotions: [], language: lang }
   })
 
-  if (!hasText) return lexiconFallback()
+  // Always call the model — it uses rating even when feedback is empty.
+  // Only skip if we have no items at all.
+  if (!items.length) return []
 
   try {
     const res  = await fetch('/api/analyze-sentiment', {
