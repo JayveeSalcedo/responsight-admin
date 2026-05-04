@@ -574,13 +574,6 @@ export default function IncidentsPage() {
 
   // ── Dispatch ──────────────────────────────────────────────────────────────
 
-  /**
-   * FIX: The previous query used alias "user" and read r.user.responder_status,
-   * but the FK join alias must match the relationship name ("responder") and
-   * the column in the users table is "status", not "responder_status".
-   * Also removed the stale 30-min filter so ALL responders with a location row
-   * are shown (the mobile app may update infrequently on some devices).
-   */
   const fetchResponders = useCallback(async () => {
     const { data, error } = await supabase
       .from('responder_locations')
@@ -603,10 +596,8 @@ export default function IncidentsPage() {
           updated_at:       r.updated_at,
           first_name:       r.responder.first_name,
           last_name:        r.responder.last_name,
-          // users.status holds values like 'online', 'on_scene', 'offline'
           responder_status: r.responder.status ?? 'online',
         }))
-        // Show everyone who has a location row — filter offline only
         .filter((r: ResponderLocation) => r.responder_status !== 'offline')
     )
     setLastUpdate(new Date())
@@ -664,10 +655,10 @@ export default function IncidentsPage() {
           ? `${totalCount} total · page ${page} of ${totalPages}`
           : `${reports.length} reports · ${activeCount} active · ${mappable.length} on map`
       } />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
 
         {/* ── Toolbar ──────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-surface-border bg-surface-card/60 flex-wrap">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-surface-border bg-surface-card/60 flex-wrap shrink-0">
           <div className="flex rounded-lg overflow-hidden border border-surface-border">
             {([['map', Map, 'Map'], ['list', List, 'List'], ['dispatch', Radio, 'Live Dispatch']] as const).map(([v, Icon, label]) => (
               <button key={v} onClick={() => setView(v as ViewMode)}
@@ -710,14 +701,18 @@ export default function IncidentsPage() {
 
         {/* ── MAP VIEW ──────────────────────────────────────────────────── */}
         {view === 'map' && (
-          <div className="flex-1 flex overflow-hidden">
-            <div className="w-80 border-r border-surface-border flex flex-col bg-surface-card overflow-hidden shrink-0">
-              <div className="px-4 py-3 border-b border-surface-border">
+          // FIX: min-h-0 prevents the flex row from growing taller than the
+          // available viewport space when the incident list gets long.
+          <div className="flex-1 flex overflow-hidden min-h-0">
+
+            {/* Incident list panel — scrolls internally, never pushes the map */}
+            <div className="w-80 border-r border-surface-border flex flex-col bg-surface-card shrink-0 min-h-0">
+              <div className="px-4 py-3 border-b border-surface-border shrink-0">
                 <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
                   {mappable.length} plotted · {unmappable.length} without coords
                 </p>
               </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-surface-border">
+              <div className="flex-1 overflow-y-auto divide-y divide-surface-border min-h-0">
                 {reports.map(r => (
                   <button key={r.id}
                     onClick={() => setSelectedId(r.id === selectedId ? null : r.id)}
@@ -736,7 +731,8 @@ export default function IncidentsPage() {
               </div>
             </div>
 
-            <div className="flex-1 relative">
+            {/* Map panel — fills remaining space, locked to viewport height */}
+            <div className="flex-1 relative min-h-0">
               <IncidentMap reports={mappable} selectedId={selectedId} onSelectReport={r => setSelectedId(r.id === selectedId ? null : r.id)} />
               {selected && (
                 <div className="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 glass rounded-xl p-4 shadow-2xl z-[1000]">
@@ -786,9 +782,9 @@ export default function IncidentsPage() {
 
         {/* ── LIST VIEW ─────────────────────────────────────────────────── */}
         {view === 'list' && (
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Cards */}
-            <div className="flex-1 overflow-auto p-4">
+            <div className="flex-1 overflow-auto p-4 min-h-0">
               {loading ? (
                 <div className="py-12 text-center text-sm text-text-muted animate-pulse">Loading...</div>
               ) : reports.length === 0 ? (
@@ -851,7 +847,6 @@ export default function IncidentsPage() {
                   Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
                 </span>
                 <div className="flex items-center gap-1">
-                  {/* Prev */}
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
@@ -859,8 +854,6 @@ export default function IncidentsPage() {
                   >
                     ←
                   </button>
-
-                  {/* Page numbers — show at most 5 around current */}
                   {(() => {
                     const delta = 2
                     const range: (number | '...')[] = []
@@ -890,8 +883,6 @@ export default function IncidentsPage() {
                       )
                     )
                   })()}
-
-                  {/* Next */}
                   <button
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
@@ -907,9 +898,9 @@ export default function IncidentsPage() {
 
         {/* ── LIVE DISPATCH VIEW ────────────────────────────────────────── */}
         {view === 'dispatch' && (
-          <div className="flex-1 flex overflow-hidden">
-            <div className="w-72 border-r border-surface-border flex flex-col bg-surface-card shrink-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-surface-border space-y-2">
+          <div className="flex-1 flex overflow-hidden min-h-0">
+            <div className="w-72 border-r border-surface-border flex flex-col bg-surface-card shrink-0 min-h-0">
+              <div className="px-4 py-3 border-b border-surface-border space-y-2 shrink-0">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Responders</span>
                   <span className="text-[10px] text-text-muted">Updated {secsSince}s ago</span>
@@ -928,13 +919,13 @@ export default function IncidentsPage() {
                 </div>
               </div>
 
-              <div className="px-3 py-2 border-b border-surface-border">
+              <div className="px-3 py-2 border-b border-surface-border shrink-0">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
                   <Navigation className="w-3 h-3" /> Active Responders
                 </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto divide-y divide-surface-border">
+              <div className="flex-1 overflow-y-auto divide-y divide-surface-border min-h-0">
                 {responders.length === 0 && !dispatchLoading && (
                   <div className="px-4 py-6 text-center text-xs text-text-muted">No responders online</div>
                 )}
@@ -967,7 +958,7 @@ export default function IncidentsPage() {
                   )
                 })}
 
-                <div className="px-3 py-2 bg-surface-muted/40">
+                <div className="px-3 py-2 bg-surface-muted/40 shrink-0">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted flex items-center gap-1.5">
                     <AlertTriangle className="w-3 h-3" /> Open Incidents ({liveIncidents.length})
                   </p>
@@ -992,7 +983,7 @@ export default function IncidentsPage() {
               </div>
             </div>
 
-            <div className="flex-1 relative">
+            <div className="flex-1 relative min-h-0">
               {dispatchLoading ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-surface text-text-muted text-sm gap-2 z-10">
                   <RefreshCw className="w-4 h-4 animate-spin" /> Loading…

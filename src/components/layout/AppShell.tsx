@@ -29,10 +29,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-surface">
+    // FIX: h-screen + overflow-hidden locks the shell to exactly the viewport.
+    // Previously min-h-screen allowed the container to grow beyond the screen,
+    // which caused flex children (the map row) to expand with list content
+    // instead of being constrained to the remaining available height.
+    <div className="flex h-screen overflow-hidden bg-surface">
       <Sidebar onNavigate={handleNavigate} onCollapse={setCollapsed} />
       <div
-        className="flex-1 flex flex-col relative transition-all duration-200 overflow-hidden min-w-0"
+        className="flex-1 flex flex-col relative transition-all duration-200 overflow-hidden min-w-0 min-h-0"
         style={{ marginLeft: collapsed ? 60 : 240 }}
       >
         {loading && (
