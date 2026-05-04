@@ -8,14 +8,13 @@ import { computeSentiment, analyseSentiment, computeSentimentBatch, detectLangua
 import type { SentimentLabel, ModelSentimentResult, DetectedLanguage } from '@/types'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, Cell, LabelList,
 } from 'recharts'
 import { format, subDays, startOfDay, subWeeks, subMonths, isAfter, isBefore } from 'date-fns'
 import {
   Star, MapPin, Shield, MessageSquare, Brain, Building2, FileText,
-  ChevronDown, ChevronUp, Cpu, Zap, WifiOff, AlertTriangle, TrendingUp,
-  TrendingDown, Minus, Download, Users, BarChart2, Lightbulb,
+  ChevronDown, ChevronUp, Cpu, Zap, WifiOff, TrendingUp,
+  TrendingDown, Minus, Download, Lightbulb,
 } from 'lucide-react'
 import { timeAgo } from '@/lib/utils'
 
@@ -75,15 +74,13 @@ const STOP_WORDS = new Set([
 ])
 const TOOLTIP_STYLE = { backgroundColor: '#13161e', border: '1px solid #1e2330', borderRadius: '8px', color: '#f0f2f8', fontSize: '12px' }
 
-// ─── Severity score helper (for flagged queue sorting) ────────────────────────
-// severity score: lower rating = higher urgency, anger/negative sentiment amplifies
-function severityScore(rating: number, sentiment: ReturnType<typeof computeSentiment>): number {
-  const ratingScore = (5 - rating) * 20          // 0-80
-  const sentBoost   = sentiment.label === 'anger' ? 20 : sentiment.label === 'negative' ? 10 : 0
-  return ratingScore + sentBoost
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** True when a feedback entry is considered negative / needs attention */
+function isNegative(rating: number, sentiment: ReturnType<typeof computeSentiment>): boolean {
+  return rating <= 2 || sentiment.label === 'negative' || sentiment.label === 'anger'
 }
 
-// ─── CSV export helper ────────────────────────────────────────────────────────
 function exportToCSV(filename: string, rows: Record<string, any>[]) {
   if (!rows.length) return
   const headers = Object.keys(rows[0])
@@ -96,14 +93,11 @@ function exportToCSV(filename: string, rows: Record<string, any>[]) {
       }).join(',')
     ),
   ].join('\n')
-  const blob = new URL(`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`)
   const a = document.createElement('a')
   a.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`
   a.download = filename
   a.click()
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function StarRow({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'lg' }) {
   const cls = size === 'lg' ? 'w-5 h-5' : 'w-3.5 h-3.5'
@@ -127,7 +121,7 @@ function ServiceStatusBadge({ status }: { status: 'checking' | 'online' | 'offli
     </span>
   )
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-surface-muted border border-surface-border text-text-muted" title="Start: cd sentiment_service && python main.py">
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-surface-muted border border-surface-border text-text-muted">
       <WifiOff className="w-3 h-3" /> Lexicon fallback
     </span>
   )
@@ -145,7 +139,7 @@ const LANG_CFG: Record<DetectedLanguage, { label: string; flag: string; cls: str
 function LanguageBadge({ language }: { language: DetectedLanguage }) {
   const cfg = LANG_CFG[language]
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${cfg.cls}`} title={`Detected language: ${language}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${cfg.cls}`}>
       {cfg.flag} {cfg.label}
     </span>
   )
@@ -163,8 +157,7 @@ function SentimentBadge({ rating, feedback, modelResult }: { rating: number; fee
   const cfg  = SENT_CFG[sent.label]
   const isModel = modelResult?.source === 'model'
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.bg} ${cfg.border}`} style={{ color: cfg.color }}
-      title={isModel && modelResult ? `ML model · ${modelResult.emotion} (${Math.round(modelResult.emotion_score * 100)}%)` : 'Lexicon-based'}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.bg} ${cfg.border}`} style={{ color: cfg.color }}>
       {isModel ? <Cpu className="w-2.5 h-2.5 opacity-70" /> : <Zap className="w-2.5 h-2.5 opacity-50" />}
       {cfg.label}
       <span className="opacity-60">{Math.round(sent.confidence * 100)}%</span>
@@ -177,8 +170,8 @@ function SentimentBadge({ rating, feedback, modelResult }: { rating: number; fee
 function SentimentAnalysisPanel({ rating, feedback, modelResult }: {
   rating: number; feedback: string | null; modelResult?: ModelSentimentResult
 }) {
-  const result = modelResult ?? computeSentiment(rating, feedback)
-  const cfg    = SENT_CFG[result.label]
+  const result  = modelResult ?? computeSentiment(rating, feedback)
+  const cfg     = SENT_CFG[result.label]
   const isModel = modelResult?.source === 'model'
 
   return (
@@ -251,7 +244,8 @@ function SentimentAnalysisPanel({ rating, feedback, modelResult }: {
   )
 }
 
-// ── d3-cloud loader ────────────────────────────────────────────────────────────
+// ─── Word Cloud ───────────────────────────────────────────────────────────────
+
 let _d3CloudReady = false
 let _d3CloudPromise: Promise<void> | null = null
 function ensureD3Cloud(): Promise<void> {
@@ -331,7 +325,7 @@ function WordCloud({ texts }: { texts: string[] }) {
   )
 }
 
-// ─── Top Keywords Bar Chart ───────────────────────────────────────────────────
+// ─── Top Keywords Chart ───────────────────────────────────────────────────────
 
 function TopKeywordsChart({ texts, topN = 15 }: { texts: string[]; topN?: number }) {
   const data = useMemo(() => {
@@ -366,7 +360,7 @@ function TopKeywordsChart({ texts, topN = 15 }: { texts: string[]; topN?: number
   )
 }
 
-// ─── NEW: Aggregated Improvement Themes ──────────────────────────────────────
+// ─── Improvement Themes ───────────────────────────────────────────────────────
 
 function ImprovementThemes({ items }: { items: { feedback: string | null }[] }) {
   const themes = useMemo(() => {
@@ -375,7 +369,6 @@ function ImprovementThemes({ items }: { items: { feedback: string | null }[] }) 
       const { improvement } = parseImprovementText(r.feedback)
       if (!improvement) return
       const words = improvement.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w))
-      // bi-grams + individual words
       words.forEach(w => { phrases[w] = (phrases[w] ?? 0) + 1 })
       for (let i = 0; i < words.length - 1; i++) {
         const bg = `${words[i]} ${words[i+1]}`
@@ -419,246 +412,7 @@ function ImprovementThemes({ items }: { items: { feedback: string | null }[] }) 
   )
 }
 
-// ─── NEW: Flagged Feedback Queue ──────────────────────────────────────────────
-
-interface FlaggedItem {
-  id: string
-  created_at: string
-  rating: number
-  feedback: string | null
-  is_anonymous: boolean
-  citizen: { first_name: string; last_name: string; barangay: string | null; zone: string | null } | null
-  responder: { id: string; first_name: string; last_name: string } | null | undefined
-  report: { title: string; incident_type: string; location: string; severity: string } | null | undefined
-  agency?: string
-  sentiment: ReturnType<typeof computeSentiment>
-  urgencyScore: number
-}
-
-function FlaggedQueue({ items }: { items: FlaggedItem[] }) {
-  const [expanded, setExpanded] = useState<string | null>(null)
-  if (!items.length) return (
-    <div className="text-center py-10 glass rounded-xl">
-      <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-green-400 opacity-50" />
-      <p className="text-sm text-green-400 font-medium">All clear</p>
-      <p className="text-xs text-text-muted mt-1">No negative or angry feedback requiring attention</p>
-    </div>
-  )
-
-  return (
-    <div className="space-y-3">
-      {items.map((fb, idx) => {
-        const sentCfg = SENT_CFG[fb.sentiment.label]
-        const isTop = idx < 3
-        return (
-          <div key={fb.id} className={`glass rounded-xl overflow-hidden border ${isTop ? 'border-violet-500/30' : 'border-surface-border'}`}>
-            {isTop && <div className="h-0.5 w-full bg-gradient-to-r from-violet-500 to-orange-500" />}
-            <div className="p-4">
-              <div className="flex items-start gap-3">
-                {/* Urgency rank */}
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${isTop ? 'bg-violet-500/15 text-violet-400 border border-violet-500/30' : 'bg-surface-muted text-text-muted'}`}>
-                  #{idx + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-text-primary">
-                        {fb.is_anonymous ? 'Anonymous' : fb.citizen ? `${fb.citizen.first_name} ${fb.citizen.last_name}` : 'Unknown'}
-                      </span>
-                      {fb.agency && (() => {
-                        const cfg = AGENCY_CFG[fb.agency]
-                        return (
-                          <span className="text-[11px] inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-bold" style={{ color: cfg?.color ?? '#888', borderColor: (cfg?.color ?? '#888') + '40', backgroundColor: (cfg?.color ?? '#888') + '15' }}>
-                            {cfg?.logo ? <img src={cfg.logo} alt={fb.agency} className="w-3 h-3 object-contain" /> : null}
-                            {fb.agency}
-                          </span>
-                        )
-                      })()}
-                      <StarRow rating={fb.rating} />
-                      <span className={`text-xs font-semibold ${ratingColor(fb.rating)}`}>{ratingLabel(fb.rating)}</span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${sentCfg.bg} ${sentCfg.border}`} style={{ color: sentCfg.color }}>
-                        {sentCfg.emoji} {sentCfg.label}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-text-muted shrink-0">{timeAgo(fb.created_at)}</span>
-                  </div>
-                  {fb.feedback && (() => {
-                    const { improvement, overall } = parseImprovementText(fb.feedback)
-                    return (
-                      <div className="mt-2 space-y-1.5">
-                        {improvement && (
-                          <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-orange-500/5 border border-orange-500/15">
-                            <span className="text-orange-400 text-xs mt-0.5 shrink-0">⚠️</span>
-                            <div>
-                              <p className="text-[10px] font-semibold text-orange-400 uppercase tracking-wider mb-0.5">Needs improvement</p>
-                              <p className="text-xs text-text-primary leading-relaxed">{improvement}</p>
-                            </div>
-                          </div>
-                        )}
-                        {overall && (
-                          <div className="flex items-start gap-2">
-                            <MessageSquare className="w-3.5 h-3.5 text-text-muted mt-0.5 shrink-0" />
-                            <p className="text-sm text-text-primary leading-relaxed">{overall}</p>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })()}
-                  {fb.report && (
-                    <div className="mt-2 rounded-lg bg-surface-muted border border-surface-border p-2.5 flex items-center gap-2 flex-wrap">
-                      <span>{INCIDENT_ICONS[fb.report.incident_type] ?? '⚠️'}</span>
-                      <span className="text-xs font-semibold text-text-primary truncate">{fb.report.title}</span>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full border capitalize font-bold ${SEVERITY_PILL[fb.report.severity] ?? ''}`}>{fb.report.severity}</span>
-                      <span className="text-xs text-text-muted flex items-center gap-1"><MapPin className="w-3 h-3" />{fb.report.location}</span>
-                    </div>
-                  )}
-                  {fb.responder && (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <Shield className="w-3 h-3 text-brand-400 shrink-0" />
-                      <span className="text-xs text-text-muted">Responder: <span className="text-text-secondary font-medium">{fb.responder.first_name} {fb.responder.last_name}</span></span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ─── NEW: Per-Responder Breakdown ─────────────────────────────────────────────
-
-function ResponderBreakdown({ items }: { items: (ReportRating & { sentiment: ReturnType<typeof computeSentiment> })[] }) {
-  const stats = useMemo(() => {
-    const map: Record<string, { id: string; name: string; ratings: number[]; sentiments: SentimentLabel[]; feedbacks: string[] }> = {}
-    items.forEach(r => {
-      if (!r.responder) return
-      const key = r.responder.id
-      if (!map[key]) map[key] = { id: key, name: `${r.responder.first_name} ${r.responder.last_name}`, ratings: [], sentiments: [], feedbacks: [] }
-      map[key].ratings.push(r.rating)
-      map[key].sentiments.push(r.sentiment.label)
-      if (r.feedback) map[key].feedbacks.push(r.feedback)
-    })
-    return Object.values(map).map(r => {
-      const avg = r.ratings.reduce((a, b) => a + b, 0) / r.ratings.length
-      const negCount = r.sentiments.filter(s => s === 'negative' || s === 'anger').length
-      return { ...r, avg: Math.round(avg * 10) / 10, negCount, total: r.ratings.length }
-    }).sort((a, b) => a.avg - b.avg) // worst first = most actionable
-  }, [items])
-
-  if (!stats.length) return (
-    <div className="text-center py-8 text-xs text-text-muted">
-      <Users className="w-6 h-6 mx-auto mb-2 opacity-30" />
-      No responder data linked to ratings yet
-    </div>
-  )
-
-  return (
-    <div className="space-y-2">
-      {stats.map((r, i) => {
-        const color = ratingColor(Math.round(r.avg))
-        const negPct = Math.round((r.negCount / r.total) * 100)
-        return (
-          <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl glass border border-surface-border">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${i === 0 ? 'bg-violet-500/15 text-violet-400 border border-violet-500/30' : 'bg-surface-muted text-text-muted'}`}>
-              {i + 1}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold text-text-primary truncate">{r.name}</span>
-                {i === 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 font-semibold">Needs attention</span>}
-              </div>
-              <div className="flex items-center gap-3 mt-1 flex-wrap">
-                <span className={`text-sm font-bold ${color}`}>{r.avg} ★</span>
-                <span className="text-xs text-text-muted">{r.total} rating{r.total !== 1 ? 's' : ''}</span>
-                {r.negCount > 0 && <span className="text-xs text-orange-400">{r.negCount} negative ({negPct}%)</span>}
-              </div>
-            </div>
-            <div className="w-24 h-1.5 bg-surface-muted rounded-full overflow-hidden shrink-0">
-              <div className="h-full rounded-full transition-all" style={{ width: `${(r.avg / 5) * 100}%`, backgroundColor: r.avg >= 4 ? '#22c55e' : r.avg >= 3 ? '#facc15' : '#f97316' }} />
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ─── NEW: Agency Trend Comparison (this period vs last period) ────────────────
-
-function AgencyTrendComparison({ items, agency }: { items: AgencyFeedback[]; agency: string | null }) {
-  const [period, setPeriod] = useState<'week' | 'month'>('week')
-
-  const { current, previous, delta, trend } = useMemo(() => {
-    const now = new Date()
-    const [curStart, prevStart, prevEnd] = period === 'week'
-      ? [subWeeks(now, 1), subWeeks(now, 2), subWeeks(now, 1)]
-      : [subMonths(now, 1), subMonths(now, 2), subMonths(now, 1)]
-
-    const filtered = agency ? items.filter(r => r.agency === agency) : items
-    const curItems  = filtered.filter(r => isAfter(new Date(r.created_at), curStart))
-    const prevItems = filtered.filter(r => isAfter(new Date(r.created_at), prevStart) && isBefore(new Date(r.created_at), prevEnd))
-
-    const avgOf = (arr: AgencyFeedback[]) => arr.length ? Math.round((arr.reduce((s, r) => s + r.rating, 0) / arr.length) * 10) / 10 : null
-    const cur = avgOf(curItems), prev = avgOf(prevItems)
-    const d = cur !== null && prev !== null ? Math.round((cur - prev) * 10) / 10 : null
-
-    return { current: { avg: cur, count: curItems.length }, previous: { avg: prev, count: prevItems.length }, delta: d, trend: d === null ? 'flat' : d > 0 ? 'up' : d < 0 ? 'down' : 'flat' }
-  }, [items, agency, period])
-
-  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus
-  const trendColor = trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-violet-400' : 'text-text-muted'
-  const trendBg = trend === 'up' ? 'bg-green-500/10 border-green-500/20' : trend === 'down' ? 'bg-violet-500/10 border-violet-500/20' : 'bg-surface-muted border-surface-border'
-
-  return (
-    <div className="glass rounded-xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-text-muted" />
-            Period Comparison {agency ? `— ${agency}` : '(All Agencies)'}
-          </p>
-          <p className="text-xs text-text-muted mt-0.5">Are ratings improving or declining?</p>
-        </div>
-        <div className="flex gap-1">
-          {(['week','month'] as const).map(p => (
-            <button key={p} onClick={() => setPeriod(p)} className={`px-2.5 py-1 rounded-md text-xs capitalize ${period === p ? 'bg-brand-600 text-white' : 'bg-surface-muted text-text-muted'}`}>{p}</button>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        {/* Previous period */}
-        <div className="glass rounded-xl p-4 text-center">
-          <p className="text-[11px] text-text-muted mb-1">Previous {period}</p>
-          <p className={`text-2xl font-bold ${previous.avg !== null ? ratingColor(Math.round(previous.avg)) : 'text-text-muted'}`}>
-            {previous.avg ?? '—'}
-          </p>
-          <p className="text-[11px] text-text-muted">{previous.count} responses</p>
-        </div>
-        {/* Delta */}
-        <div className={`rounded-xl p-4 text-center border flex flex-col items-center justify-center gap-1 ${trendBg}`}>
-          <TrendIcon className={`w-6 h-6 ${trendColor}`} />
-          <p className={`text-xl font-bold ${trendColor}`}>
-            {delta !== null ? `${delta > 0 ? '+' : ''}${delta}` : '—'}
-          </p>
-          <p className={`text-[11px] font-semibold capitalize ${trendColor}`}>{trend === 'flat' ? 'No change' : trend === 'up' ? 'Improving' : 'Declining'}</p>
-        </div>
-        {/* Current period */}
-        <div className="glass rounded-xl p-4 text-center">
-          <p className="text-[11px] text-text-muted mb-1">This {period}</p>
-          <p className={`text-2xl font-bold ${current.avg !== null ? ratingColor(Math.round(current.avg)) : 'text-text-muted'}`}>
-            {current.avg ?? '—'}
-          </p>
-          <p className="text-[11px] text-text-muted">{current.count} responses</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Summary header ───────────────────────────────────────────────────────────
+// ─── Summary Header ───────────────────────────────────────────────────────────
 
 function SummaryHeader({ items, modelResults }: {
   items: { rating: number; feedback: string | null }[]
@@ -713,7 +467,70 @@ function SummaryHeader({ items, modelResults }: {
   )
 }
 
-// ─── Card Lists ───────────────────────────────────────────────────────────────
+// ─── Agency Trend Comparison ──────────────────────────────────────────────────
+
+function AgencyTrendComparison({ items, agency }: { items: AgencyFeedback[]; agency: string | null }) {
+  const [period, setPeriod] = useState<'week' | 'month'>('week')
+
+  const { current, previous, delta, trend } = useMemo(() => {
+    const now = new Date()
+    const [curStart, prevStart, prevEnd] = period === 'week'
+      ? [subWeeks(now, 1), subWeeks(now, 2), subWeeks(now, 1)]
+      : [subMonths(now, 1), subMonths(now, 2), subMonths(now, 1)]
+
+    const filtered = agency ? items.filter(r => r.agency === agency) : items
+    const curItems  = filtered.filter(r => isAfter(new Date(r.created_at), curStart))
+    const prevItems = filtered.filter(r => isAfter(new Date(r.created_at), prevStart) && isBefore(new Date(r.created_at), prevEnd))
+
+    const avgOf = (arr: AgencyFeedback[]) => arr.length ? Math.round((arr.reduce((s, r) => s + r.rating, 0) / arr.length) * 10) / 10 : null
+    const cur = avgOf(curItems), prev = avgOf(prevItems)
+    const d = cur !== null && prev !== null ? Math.round((cur - prev) * 10) / 10 : null
+
+    return { current: { avg: cur, count: curItems.length }, previous: { avg: prev, count: prevItems.length }, delta: d, trend: d === null ? 'flat' : d > 0 ? 'up' : d < 0 ? 'down' : 'flat' }
+  }, [items, agency, period])
+
+  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus
+  const trendColor = trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-violet-400' : 'text-text-muted'
+  const trendBg = trend === 'up' ? 'bg-green-500/10 border-green-500/20' : trend === 'down' ? 'bg-violet-500/10 border-violet-500/20' : 'bg-surface-muted border-surface-border'
+
+  return (
+    <div className="glass rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-text-muted" />
+            Period Comparison {agency ? `— ${agency}` : '(All Agencies)'}
+          </p>
+          <p className="text-xs text-text-muted mt-0.5">Are ratings improving or declining?</p>
+        </div>
+        <div className="flex gap-1">
+          {(['week','month'] as const).map(p => (
+            <button key={p} onClick={() => setPeriod(p)} className={`px-2.5 py-1 rounded-md text-xs capitalize ${period === p ? 'bg-brand-600 text-white' : 'bg-surface-muted text-text-muted'}`}>{p}</button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="glass rounded-xl p-4 text-center">
+          <p className="text-[11px] text-text-muted mb-1">Previous {period}</p>
+          <p className={`text-2xl font-bold ${previous.avg !== null ? ratingColor(Math.round(previous.avg)) : 'text-text-muted'}`}>{previous.avg ?? '—'}</p>
+          <p className="text-[11px] text-text-muted">{previous.count} responses</p>
+        </div>
+        <div className={`rounded-xl p-4 text-center border flex flex-col items-center justify-center gap-1 ${trendBg}`}>
+          <TrendIcon className={`w-6 h-6 ${trendColor}`} />
+          <p className={`text-xl font-bold ${trendColor}`}>{delta !== null ? `${delta > 0 ? '+' : ''}${delta}` : '—'}</p>
+          <p className={`text-[11px] font-semibold capitalize ${trendColor}`}>{trend === 'flat' ? 'No change' : trend === 'up' ? 'Improving' : 'Declining'}</p>
+        </div>
+        <div className="glass rounded-xl p-4 text-center">
+          <p className="text-[11px] text-text-muted mb-1">This {period}</p>
+          <p className={`text-2xl font-bold ${current.avg !== null ? ratingColor(Math.round(current.avg)) : 'text-text-muted'}`}>{current.avg ?? '—'}</p>
+          <p className="text-[11px] text-text-muted">{current.count} responses</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Report Card List (all feedback, negatives highlighted) ───────────────────
 
 function ReportCardList({ items, modelResults }: {
   items: (ReportRating & { sentiment: ReturnType<typeof computeSentiment> })[]
@@ -721,14 +538,27 @@ function ReportCardList({ items, modelResults }: {
 }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const toggle = (id: string) => setExpanded(prev => prev === id ? null : id)
+
   return (
     <div className="space-y-3">
       {items.map(fb => {
         const modelResult = modelResults?.get(fb.id)
+        const negative    = isNegative(fb.rating, fb.sentiment)
+
         return (
-          <div key={fb.id} className="glass rounded-xl overflow-hidden">
-            <div className={`h-1 w-full ${fb.report ? SEVERITY_BAR[fb.report.severity] ?? 'bg-surface-muted' : 'bg-surface-muted'}`} />
+          <div key={fb.id} className={`glass rounded-xl overflow-hidden border ${negative ? 'border-orange-500/40' : 'border-surface-border'}`}>
+            {/* severity/negativity top bar */}
+            <div className={`h-1 w-full ${fb.report ? SEVERITY_BAR[fb.report.severity] ?? 'bg-surface-muted' : negative ? 'bg-orange-500' : 'bg-surface-muted'}`} />
+
             <div className="p-5">
+              {/* Negative flag banner */}
+              {negative && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-1.5 rounded-lg bg-orange-500/8 border border-orange-500/20">
+                  <span className="text-orange-400 font-bold text-sm">※</span>
+                  <span className="text-[11px] font-semibold text-orange-400">Negative feedback — needs attention</span>
+                </div>
+              )}
+
               <div className="flex items-start gap-4">
                 <div className="w-9 h-9 rounded-full bg-brand-600/15 border border-brand-600/20 flex items-center justify-center text-brand-400 font-bold text-xs shrink-0">
                   {fb.is_anonymous || !fb.citizen ? '?' : `${fb.citizen.first_name[0]}${fb.citizen.last_name[0]}`}
@@ -737,7 +567,10 @@ function ReportCardList({ items, modelResults }: {
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-text-primary">{fb.is_anonymous ? 'Anonymous' : fb.citizen ? `${fb.citizen.first_name} ${fb.citizen.last_name}` : 'Unknown'}</span>
+                        <span className="text-sm font-semibold text-text-primary">
+                          {negative && <span className="text-orange-400 mr-1">※</span>}
+                          {fb.is_anonymous ? 'Anonymous' : fb.citizen ? `${fb.citizen.first_name} ${fb.citizen.last_name}` : 'Unknown'}
+                        </span>
                         {fb.is_anonymous && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-muted border border-surface-border text-text-muted">Anonymous</span>}
                         {!fb.is_anonymous && fb.citizen?.barangay && <span className="text-[11px] text-text-muted">Brgy. {fb.citizen.barangay}{fb.citizen.zone ? `, ${fb.citizen.zone}` : ''}</span>}
                       </div>
@@ -756,6 +589,7 @@ function ReportCardList({ items, modelResults }: {
                     </div>
                     <span className="text-[11px] text-text-muted shrink-0">{timeAgo(fb.created_at)}</span>
                   </div>
+
                   {fb.feedback && (() => {
                     const { improvement, overall } = parseImprovementText(fb.feedback)
                     return (
@@ -778,7 +612,9 @@ function ReportCardList({ items, modelResults }: {
                       </>
                     )
                   })()}
+
                   {expanded === fb.id && <SentimentAnalysisPanel rating={fb.rating} feedback={fb.feedback} modelResult={modelResult} />}
+
                   {fb.report && (
                     <div className="rounded-lg bg-surface-muted border border-surface-border p-3 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -808,21 +644,34 @@ function ReportCardList({ items, modelResults }: {
   )
 }
 
+// ─── Agency Card List (all feedback, negatives highlighted) ──────────────────
+
 function AgencyCardList({ items, modelResults }: {
   items: (AgencyFeedback & { sentiment: ReturnType<typeof computeSentiment> })[]
   modelResults?: Map<string, ModelSentimentResult>
 }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const toggle = (id: string) => setExpanded(prev => prev === id ? null : id)
+
   return (
     <div className="space-y-3">
       {items.map(fb => {
-        const cfg = AGENCY_CFG[fb.agency] ?? { color: '#888', bg: 'bg-surface-muted', logo: '' }
+        const cfg         = AGENCY_CFG[fb.agency] ?? { color: '#888', bg: 'bg-surface-muted', logo: '' }
         const modelResult = modelResults?.get(fb.id)
+        const negative    = isNegative(fb.rating, fb.sentiment)
+
         return (
-          <div key={fb.id} className="glass rounded-xl overflow-hidden">
-            <div className="h-1 w-full" style={{ backgroundColor: cfg.color }} />
+          <div key={fb.id} className={`glass rounded-xl overflow-hidden border ${negative ? 'border-orange-500/40' : 'border-surface-border'}`}>
+            <div className="h-1 w-full" style={{ backgroundColor: negative ? '#f97316' : cfg.color }} />
+
             <div className="p-5">
+              {negative && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-1.5 rounded-lg bg-orange-500/8 border border-orange-500/20">
+                  <span className="text-orange-400 font-bold text-sm">※</span>
+                  <span className="text-[11px] font-semibold text-orange-400">Negative feedback — needs attention</span>
+                </div>
+              )}
+
               <div className="flex items-start gap-4">
                 <div className="w-9 h-9 rounded-full border flex items-center justify-center text-xs shrink-0" style={{ backgroundColor: `${cfg.color}20`, borderColor: `${cfg.color}40`, color: cfg.color }}>
                   {fb.is_anonymous || !fb.citizen ? '?' : `${fb.citizen.first_name[0]}${fb.citizen.last_name[0]}`}
@@ -831,7 +680,10 @@ function AgencyCardList({ items, modelResults }: {
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-text-primary">{fb.is_anonymous ? 'Anonymous' : fb.citizen ? `${fb.citizen.first_name} ${fb.citizen.last_name}` : 'Unknown'}</span>
+                        <span className="text-sm font-semibold text-text-primary">
+                          {negative && <span className="text-orange-400 mr-1">※</span>}
+                          {fb.is_anonymous ? 'Anonymous' : fb.citizen ? `${fb.citizen.first_name} ${fb.citizen.last_name}` : 'Unknown'}
+                        </span>
                         {fb.is_anonymous && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-muted border border-surface-border text-text-muted">Anonymous</span>}
                         {!fb.is_anonymous && (fb.citizen?.barangay || fb.barangay) && <span className="text-[11px] text-text-muted">Brgy. {fb.citizen?.barangay ?? fb.barangay}</span>}
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border" style={{ backgroundColor: `${cfg.color}15`, borderColor: `${cfg.color}30`, color: cfg.color }}>
@@ -854,6 +706,7 @@ function AgencyCardList({ items, modelResults }: {
                     </div>
                     <span className="text-[11px] text-text-muted shrink-0">{timeAgo(fb.created_at)}</span>
                   </div>
+
                   {fb.feedback && (() => {
                     const { improvement, overall } = parseImprovementText(fb.feedback)
                     return (
@@ -876,6 +729,7 @@ function AgencyCardList({ items, modelResults }: {
                       </>
                     )
                   })()}
+
                   {expanded === fb.id && <SentimentAnalysisPanel rating={fb.rating} feedback={fb.feedback} modelResult={modelResult} />}
                 </div>
               </div>
@@ -893,12 +747,10 @@ function ReportRatingsTab() {
   const supabase = createClient()
   const [ratings, setRatings]             = useState<ReportRating[]>([])
   const [loading, setLoading]             = useState(true)
-  const [starFilter, setStarFilter]       = useState<number | null>(null)
-  const [sentFilter, setSentFilter]       = useState<SentimentLabel | null>(null)
   const [trendDays, setTrendDays]         = useState<7 | 14 | 30>(14)
   const [modelResults, setModelResults]   = useState<Map<string, ModelSentimentResult>>(new Map())
   const [serviceStatus, setServiceStatus] = useState<'checking' | 'online' | 'offline'>('checking')
-  const [activeSection, setActiveSection] = useState<'flagged' | 'responders' | 'improvements' | 'all'>('flagged')
+  const [activeSection, setActiveSection] = useState<'improvements' | 'all'>('all')
 
   useEffect(() => { fetchRatings() }, [])
 
@@ -946,14 +798,10 @@ function ReportRatingsTab() {
     sentiment: modelResults.get(r.id) ?? computeSentiment(r.rating, r.feedback),
   })), [ratings, modelResults])
 
-  // Flagged queue: rating ≤ 2 OR sentiment is negative/anger, sorted by urgency
-  const flagged = useMemo(() => enriched
-    .filter(r => r.rating <= 2 || r.sentiment.label === 'negative' || r.sentiment.label === 'anger')
-    .map(r => ({ ...r, urgencyScore: severityScore(r.rating, r.sentiment) }))
-    .sort((a, b) => b.urgencyScore - a.urgencyScore || new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  , [enriched])
+  const total          = enriched.length
+  const negativeCount  = enriched.filter(r => isNegative(r.rating, r.sentiment)).length
+  const feedbackTexts  = ratings.map(r => r.feedback ?? '').filter(Boolean)
 
-  const total = enriched.length
   const trendData = useMemo(() => {
     const days = Array.from({ length: trendDays }, (_, i) => {
       const d = subDays(new Date(), trendDays - 1 - i)
@@ -968,11 +816,6 @@ function ReportRatingsTab() {
     return days
   }, [enriched, trendDays])
 
-  const starDist = [5,4,3,2,1].map(s => ({ star: s, count: ratings.filter(r => r.rating === s).length, pct: total ? Math.round(ratings.filter(r => r.rating === s).length / total * 100) : 0 }))
-  const feedbackTexts = ratings.map(r => r.feedback ?? '').filter(Boolean)
-  const filtered = enriched.filter(r => (!starFilter || r.rating === starFilter) && (!sentFilter || r.sentiment.label === sentFilter))
-
-  // CSV export
   const handleExportCSV = () => {
     exportToCSV(`report-ratings-${format(new Date(), 'yyyy-MM-dd')}.csv`, enriched.map(r => ({
       id: r.id,
@@ -981,6 +824,7 @@ function ReportRatingsTab() {
       rating_label: ratingLabel(r.rating),
       sentiment: r.sentiment.label,
       confidence: Math.round(r.sentiment.confidence * 100) + '%',
+      negative: isNegative(r.rating, r.sentiment) ? 'yes' : 'no',
       citizen: r.is_anonymous ? 'Anonymous' : r.citizen ? `${r.citizen.first_name} ${r.citizen.last_name}` : '',
       barangay: r.citizen?.barangay ?? '',
       responder: r.responder ? `${r.responder.first_name} ${r.responder.last_name}` : '',
@@ -999,137 +843,38 @@ function ReportRatingsTab() {
     <div className="space-y-5">
       {/* Header row */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <ServiceStatusBadge status={serviceStatus} />
-        <div className="flex items-center gap-2">
-          {serviceStatus === 'offline' && (
-            <p className="text-xs text-text-muted hidden md:block">Run <code className="bg-surface-muted px-1.5 py-0.5 rounded text-brand-400">cd sentiment_service &amp;&amp; python main.py</code></p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <ServiceStatusBadge status={serviceStatus} />
+          {negativeCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-orange-500/10 border border-orange-500/20 text-orange-400">
+              ※ {negativeCount} negative feedback{negativeCount !== 1 ? 's' : ''}
+            </span>
           )}
-          <button onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-surface-border text-text-muted hover:text-text-primary hover:border-brand-500/40 transition-all">
-            <Download className="w-3.5 h-3.5" /> Export CSV
-          </button>
         </div>
+        <button onClick={handleExportCSV}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-surface-border text-text-muted hover:text-text-primary hover:border-brand-500/40 transition-all">
+          <Download className="w-3.5 h-3.5" /> Export CSV
+        </button>
       </div>
 
       <SummaryHeader items={enriched} modelResults={modelResults} />
 
-      {/* ── Section switcher ── */}
-      <div className="flex gap-1 p-1 bg-surface-muted rounded-xl w-fit border border-surface-border flex-wrap">
+      {/* ── Section switcher — only Improvements tab + All Feedback ── */}
+      <div className="flex gap-1 p-1 bg-surface-muted rounded-xl w-fit border border-surface-border">
         {([
-          { key: 'flagged',      label: 'Needs Attention', icon: AlertTriangle, badge: flagged.length > 0 ? flagged.length : undefined },
-          { key: 'responders',   label: 'By Responder',    icon: Users, badge: undefined },
-          { key: 'improvements', label: 'Improvement Themes', icon: Lightbulb, badge: undefined },
-          { key: 'all',          label: 'All Ratings',     icon: MessageSquare, badge: undefined },
-        ] as const).map(({ key, label, icon: Icon, badge }) => (
+          { key: 'all',          label: 'All Ratings',         icon: MessageSquare },
+          { key: 'improvements', label: 'Improvement Themes',  icon: Lightbulb     },
+        ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setActiveSection(key)}
-            className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${activeSection === key ? 'bg-surface-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}>
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${activeSection === key ? 'bg-surface-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}>
             <Icon className="w-3.5 h-3.5" /> {label}
-            {badge !== undefined && (
-              <span className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-500 text-white text-[10px] font-bold">{badge}</span>
-            )}
           </button>
         ))}
       </div>
 
-      {/* ── Needs Attention ── */}
-      {activeSection === 'flagged' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-violet-400" />
-                Flagged Feedback
-                <span className="text-xs font-normal text-text-muted">({flagged.length} items)</span>
-              </p>
-              <p className="text-xs text-text-muted mt-0.5">Rating ≤ 2 or negative/angry sentiment — sorted by urgency</p>
-            </div>
-          </div>
-          <FlaggedQueue items={flagged} />
-        </div>
-      )}
-
-      {/* ── By Responder ── */}
-      {activeSection === 'responders' && (
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-              <Users className="w-4 h-4 text-text-muted" /> Responder Performance
-            </p>
-            <p className="text-xs text-text-muted mt-0.5">Sorted by lowest avg. rating — most actionable first</p>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <ResponderBreakdown items={enriched} />
-          </div>
-        </div>
-      )}
-
-      {/* ── Improvement Themes ── */}
-      {activeSection === 'improvements' && (
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-text-muted" /> Aggregated Improvement Suggestions
-            </p>
-            <p className="text-xs text-text-muted mt-0.5">Patterns across all "What could be improved?" responses</p>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <ImprovementThemes items={enriched} />
-          </div>
-          {/* Trend + Word Cloud still available here for context */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <div className="glass rounded-xl p-5 xl:col-span-2">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">Sentiment Trend</p>
-                  <p className="text-xs text-text-muted">Daily breakdown</p>
-                </div>
-                <div className="flex gap-1">
-                  {([7,14,30] as const).map(d => <button key={d} onClick={() => setTrendDays(d)} className={`px-2.5 py-1 rounded-md text-xs ${trendDays === d ? 'bg-brand-600 text-white' : 'bg-surface-muted text-text-muted'}`}>{d}d</button>)}
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                  <defs>{ALL_LABELS.map(k => <linearGradient key={k} id={`rg-${k}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={SENT_CFG[k].color} stopOpacity={0.25}/><stop offset="95%" stopColor={SENT_CFG[k].color} stopOpacity={0}/></linearGradient>)}</defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" />
-                  <XAxis dataKey="date" tick={{ fill: '#4d566b', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={{ fill: '#4d566b', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Legend wrapperStyle={{ fontSize: 11, color: '#4d566b', paddingTop: 8 }} />
-                  {ALL_LABELS.map(k => <Area key={k} type="monotone" dataKey={k} name={SENT_CFG[k].label} stroke={SENT_CFG[k].color} fill={`url(#rg-${k})`} strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />)}
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="glass rounded-xl p-5">
-              <p className="text-sm font-semibold text-text-primary mb-1">Word Cloud</p>
-              <p className="text-xs text-text-muted mb-3">Coloured by sentiment</p>
-              <WordCloud texts={feedbackTexts} />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── All Ratings ── */}
       {activeSection === 'all' && (
         <div className="space-y-5">
-          {/* Star distribution */}
-          <div className="glass rounded-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-text-primary">Star Distribution</p>
-              {starFilter && <button onClick={() => setStarFilter(null)} className="text-xs text-brand-400 hover:underline">Clear</button>}
-            </div>
-            <div className="grid grid-cols-5 gap-3">
-              {starDist.map(d => (
-                <button key={d.star} onClick={() => setStarFilter(starFilter === d.star ? null : d.star)}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${starFilter === d.star ? 'bg-yellow-500/10 border-yellow-500/30' : starFilter && starFilter !== d.star ? 'opacity-35 border-surface-border' : 'border-surface-border hover:border-yellow-500/20'}`}>
-                  <div className="flex gap-0.5">{Array.from({length:d.star}).map((_,i) => <Star key={i} className="w-3 h-3 text-yellow-400 fill-yellow-400" />)}</div>
-                  <p className="text-lg font-bold text-text-primary">{d.count}</p>
-                  <p className="text-[11px] text-text-muted">{d.pct}%</p>
-                  <div className="w-full h-1 bg-surface-muted rounded-full overflow-hidden"><div className="h-full bg-yellow-400 rounded-full" style={{ width: `${d.pct}%` }} /></div>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Trend + Word Cloud */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div className="glass rounded-xl p-5 xl:col-span-2">
@@ -1169,16 +914,60 @@ function ReportRatingsTab() {
             <TopKeywordsChart texts={feedbackTexts} />
           </div>
 
-          {/* Cards */}
+          {/* All cards */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-text-muted" /> Individual Ratings
-                <span className="text-xs font-normal text-text-muted">({filtered.length}{filtered.length !== total ? ` of ${total}` : ''})</span>
+                <MessageSquare className="w-4 h-4 text-text-muted" /> All Ratings
+                <span className="text-xs font-normal text-text-muted">({total})</span>
+                {negativeCount > 0 && <span className="text-xs text-orange-400">· ※ marks negatives</span>}
               </p>
-              {(starFilter || sentFilter) && <button onClick={() => { setStarFilter(null); setSentFilter(null) }} className="text-xs text-brand-400 hover:underline">Clear filters</button>}
             </div>
-            <ReportCardList items={filtered} modelResults={modelResults} />
+            <ReportCardList items={enriched} modelResults={modelResults} />
+          </div>
+        </div>
+      )}
+
+      {/* ── Improvement Themes ── */}
+      {activeSection === 'improvements' && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <Lightbulb className="w-4 h-4 text-text-muted" /> Aggregated Improvement Suggestions
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">Patterns across all "What could be improved?" responses</p>
+          </div>
+          <div className="glass rounded-xl p-5">
+            <ImprovementThemes items={enriched} />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="glass rounded-xl p-5 xl:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">Sentiment Trend</p>
+                  <p className="text-xs text-text-muted">Daily breakdown</p>
+                </div>
+                <div className="flex gap-1">
+                  {([7,14,30] as const).map(d => <button key={d} onClick={() => setTrendDays(d)} className={`px-2.5 py-1 rounded-md text-xs ${trendDays === d ? 'bg-brand-600 text-white' : 'bg-surface-muted text-text-muted'}`}>{d}d</button>)}
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <defs>{ALL_LABELS.map(k => <linearGradient key={k} id={`rg-${k}`} x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={SENT_CFG[k].color} stopOpacity={0.25}/><stop offset="95%" stopColor={SENT_CFG[k].color} stopOpacity={0}/></linearGradient>)}</defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" />
+                  <XAxis dataKey="date" tick={{ fill: '#4d566b', fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fill: '#4d566b', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: '#4d566b', paddingTop: 8 }} />
+                  {ALL_LABELS.map(k => <Area key={k} type="monotone" dataKey={k} name={SENT_CFG[k].label} stroke={SENT_CFG[k].color} fill={`url(#rg-${k})`} strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />)}
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="glass rounded-xl p-5">
+              <p className="text-sm font-semibold text-text-primary mb-1">Word Cloud</p>
+              <p className="text-xs text-text-muted mb-3">Coloured by sentiment</p>
+              <WordCloud texts={feedbackTexts} />
+            </div>
           </div>
         </div>
       )}
@@ -1192,12 +981,10 @@ function AgencyFeedbackTab() {
   const supabase = createClient()
   const [items, setItems]               = useState<AgencyFeedback[]>([])
   const [loading, setLoading]           = useState(true)
-  const [agencyFilter, setAgency]       = useState<string | null>(null)
-  const [starFilter, setStarFilter]     = useState<number | null>(null)
-  const [sentFilter, setSentFilter]     = useState<SentimentLabel | null>(null)
+  const [selectedAgency, setAgency]     = useState<string | null>(null)
   const [modelResults, setModelResults] = useState<Map<string, ModelSentimentResult>>(new Map())
   const [serviceStatus, setServiceStatus] = useState<'checking' | 'online' | 'offline'>('checking')
-  const [activeSection, setActiveSection] = useState<'flagged' | 'improvements' | 'trend' | 'all'>('flagged')
+  const [activeSection, setActiveSection] = useState<'improvements' | 'all'>('all')
 
   useEffect(() => { fetchAgency() }, [])
 
@@ -1239,28 +1026,13 @@ function AgencyFeedbackTab() {
     return { agency: a, count: sub.length, avg, dominant }
   }), [enriched])
 
-  // Flagged queue
-  const flagged = useMemo(() => {
-    const src = agencyFilter ? enriched.filter(r => r.agency === agencyFilter) : enriched
-    return src
-      .filter(r => r.rating <= 2 || r.sentiment.label === 'negative' || r.sentiment.label === 'anger')
-      .map(r => ({ ...r, urgencyScore: severityScore(r.rating, r.sentiment), responder: undefined, report: undefined }))
-      .sort((a, b) => b.urgencyScore - a.urgencyScore || new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  }, [enriched, agencyFilter])
+  const filtered        = selectedAgency ? enriched.filter(r => r.agency === selectedAgency) : enriched
+  const displayItems    = selectedAgency ? items.filter(r => r.agency === selectedAgency) : items
+  const feedbackTexts   = displayItems.map(r => r.feedback ?? '').filter(Boolean)
+  const negativeCount   = filtered.filter(r => isNegative(r.rating, r.sentiment)).length
 
-  const filtered = enriched.filter(r =>
-    (!agencyFilter || r.agency === agencyFilter) &&
-    (!starFilter   || r.rating === starFilter) &&
-    (!sentFilter   || r.sentiment.label === sentFilter)
-  )
-
-  const displayItems = agencyFilter ? items.filter(r => r.agency === agencyFilter) : items
-  const feedbackTexts = displayItems.map(r => r.feedback ?? '').filter(Boolean)
-  const displayEnriched = agencyFilter ? enriched.filter(r => r.agency === agencyFilter) : enriched
-
-  // CSV export
   const handleExportCSV = () => {
-    exportToCSV(`agency-feedback-${agencyFilter ?? 'all'}-${format(new Date(), 'yyyy-MM-dd')}.csv`, filtered.map(r => ({
+    exportToCSV(`agency-feedback-${selectedAgency ?? 'all'}-${format(new Date(), 'yyyy-MM-dd')}.csv`, filtered.map(r => ({
       id: r.id,
       date: format(new Date(r.created_at), 'yyyy-MM-dd HH:mm'),
       agency: r.agency,
@@ -1268,6 +1040,7 @@ function AgencyFeedbackTab() {
       rating_label: ratingLabel(r.rating),
       sentiment: r.sentiment.label,
       confidence: Math.round(r.sentiment.confidence * 100) + '%',
+      negative: isNegative(r.rating, r.sentiment) ? 'yes' : 'no',
       citizen: r.is_anonymous ? 'Anonymous' : r.citizen ? `${r.citizen.first_name} ${r.citizen.last_name}` : '',
       barangay: r.citizen?.barangay ?? r.barangay ?? '',
       improvement: parseImprovementText(r.feedback).improvement ?? '',
@@ -1287,7 +1060,14 @@ function AgencyFeedbackTab() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <ServiceStatusBadge status={serviceStatus} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <ServiceStatusBadge status={serviceStatus} />
+          {negativeCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-orange-500/10 border border-orange-500/20 text-orange-400">
+              ※ {negativeCount} negative feedback{negativeCount !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
         <button onClick={handleExportCSV}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-surface-border text-text-muted hover:text-text-primary hover:border-brand-500/40 transition-all">
           <Download className="w-3.5 h-3.5" /> Export CSV
@@ -1298,18 +1078,14 @@ function AgencyFeedbackTab() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {agencyStats.map(({ agency, count, avg, dominant }) => {
           const cfg    = AGENCY_CFG[agency] ?? { color: '#888', bg: 'bg-surface-muted', logo: '' }
-          const active = agencyFilter === agency
+          const active = selectedAgency === agency
           return (
             <button key={agency} onClick={() => setAgency(active ? null : agency)}
               className={`glass rounded-xl p-5 text-left transition-all border ${active ? 'border-brand-500/40' : 'border-surface-border'}`}
               style={active ? { boxShadow: `0 0 0 1px ${cfg.color}40` } : {}}>
               <div className="flex items-center justify-between mb-3">
                 <div className={`w-11 h-11 rounded-xl ${cfg.bg} flex items-center justify-center overflow-hidden p-1.5`}>
-                  {cfg.logo ? (
-                    <img src={cfg.logo} alt={agency} className="w-full h-full object-contain drop-shadow-sm" />
-                  ) : (
-                    <Building2 className="w-5 h-5" style={{ color: cfg.color }} />
-                  )}
+                  {cfg.logo ? <img src={cfg.logo} alt={agency} className="w-full h-full object-contain drop-shadow-sm" /> : <Building2 className="w-5 h-5" style={{ color: cfg.color }} />}
                 </div>
                 {dominant && <span className="text-xs font-semibold px-2 py-0.5 rounded-full border" style={{ color: SENT_CFG[dominant as SentimentLabel]?.color, borderColor: SENT_CFG[dominant as SentimentLabel]?.color + '40', backgroundColor: SENT_CFG[dominant as SentimentLabel]?.color + '15' }}>{SENT_CFG[dominant as SentimentLabel]?.label}</span>}
               </div>
@@ -1325,86 +1101,28 @@ function AgencyFeedbackTab() {
 
       <SummaryHeader items={displayItems} modelResults={modelResults} />
 
-      {/* Section switcher */}
-      <div className="flex gap-1 p-1 bg-surface-muted rounded-xl w-fit border border-surface-border flex-wrap">
+      {/* Trend comparison (always visible) */}
+      <AgencyTrendComparison items={items} agency={selectedAgency} />
+
+      {/* Section switcher — Improvements + All Feedback only */}
+      <div className="flex gap-1 p-1 bg-surface-muted rounded-xl w-fit border border-surface-border">
         {([
-          { key: 'flagged',      label: 'Needs Attention',  icon: AlertTriangle, badge: flagged.length > 0 ? flagged.length : undefined },
-          { key: 'improvements', label: 'Improvements',     icon: Lightbulb, badge: undefined },
-          { key: 'trend',        label: 'Trend Comparison', icon: TrendingUp, badge: undefined },
-          { key: 'all',          label: 'All Feedback',     icon: MessageSquare, badge: undefined },
-        ] as const).map(({ key, label, icon: Icon, badge }) => (
+          { key: 'all',          label: 'All Feedback',        icon: MessageSquare },
+          { key: 'improvements', label: 'Improvement Themes',  icon: Lightbulb     },
+        ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setActiveSection(key)}
-            className={`relative flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${activeSection === key ? 'bg-surface-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}>
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${activeSection === key ? 'bg-surface-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}>
             <Icon className="w-3.5 h-3.5" /> {label}
-            {badge !== undefined && (
-              <span className="ml-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-500 text-white text-[10px] font-bold">{badge}</span>
-            )}
           </button>
         ))}
       </div>
 
-      {/* ── Needs Attention ── */}
-      {activeSection === 'flagged' && (
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-violet-400" />
-              Flagged Feedback
-              <span className="text-xs font-normal text-text-muted">({flagged.length} items{agencyFilter ? ` · ${agencyFilter}` : ''})</span>
-            </p>
-            <p className="text-xs text-text-muted mt-0.5">Rating ≤ 2 or negative/angry sentiment — sorted by urgency</p>
-          </div>
-          <FlaggedQueue items={flagged} />
-        </div>
-      )}
-
-      {/* ── Improvements ── */}
-      {activeSection === 'improvements' && (
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-text-muted" /> Aggregated Improvement Suggestions
-              {agencyFilter && <span className="text-xs font-normal text-text-muted">— {agencyFilter}</span>}
-            </p>
-            <p className="text-xs text-text-muted mt-0.5">Patterns across "What could be improved?" responses</p>
-          </div>
-          <div className="glass rounded-xl p-5">
-            <ImprovementThemes items={displayEnriched} />
-          </div>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <div className="glass rounded-xl p-5">
-              <p className="text-sm font-semibold text-text-primary mb-1">Word Cloud {agencyFilter ? `— ${agencyFilter}` : '(All Agencies)'}</p>
-              <p className="text-xs text-text-muted mb-3">Most frequent words — coloured by sentiment</p>
-              <WordCloud texts={feedbackTexts} />
-            </div>
-            <div className="glass rounded-xl p-5">
-              <p className="text-sm font-semibold text-text-primary mb-1">Top Keywords</p>
-              <p className="text-xs text-text-muted mb-4">Most mentioned words — coloured by sentiment</p>
-              <TopKeywordsChart texts={feedbackTexts} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Trend Comparison ── */}
-      {activeSection === 'trend' && (
-        <div className="space-y-4">
-          <AgencyTrendComparison items={items} agency={agencyFilter} />
-          <div className="glass rounded-xl p-5">
-            <p className="text-sm font-semibold text-text-primary mb-1">Word Cloud</p>
-            <p className="text-xs text-text-muted mb-3">Coloured by sentiment</p>
-            <WordCloud texts={feedbackTexts} />
-          </div>
-        </div>
-      )}
-
       {/* ── All Feedback ── */}
       {activeSection === 'all' && (
         <div className="space-y-5">
-          {/* Word Cloud + Top Keywords */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="glass rounded-xl p-5">
-              <p className="text-sm font-semibold text-text-primary mb-1">Word Cloud {agencyFilter ? `— ${agencyFilter}` : '(All Agencies)'}</p>
+              <p className="text-sm font-semibold text-text-primary mb-1">Word Cloud {selectedAgency ? `— ${selectedAgency}` : '(All Agencies)'}</p>
               <p className="text-xs text-text-muted mb-3">Most frequent words — coloured by sentiment</p>
               <WordCloud texts={feedbackTexts} />
             </div>
@@ -1415,30 +1133,53 @@ function AgencyFeedbackTab() {
             </div>
           </div>
 
-          {/* Filters */}
+          {/* Agency filter pills */}
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-xs text-text-muted">Agency:</span>
             {agencies.map(a => (
-              <button key={a} onClick={() => setAgency(agencyFilter === a ? null : a)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${agencyFilter === a ? 'border-brand-500/40 text-brand-400 bg-brand-500/10' : 'border-surface-border text-text-muted'}`}>{a}</button>
+              <button key={a} onClick={() => setAgency(selectedAgency === a ? null : a)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${selectedAgency === a ? 'border-brand-500/40 text-brand-400 bg-brand-500/10' : 'border-surface-border text-text-muted'}`}>{a}</button>
             ))}
-            <span className="text-xs text-text-muted ml-2">Stars:</span>
-            {[5,4,3,2,1].map(s => (
-              <button key={s} onClick={() => setStarFilter(starFilter === s ? null : s)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${starFilter === s ? 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10' : 'border-surface-border text-text-muted'}`}>{s}★</button>
-            ))}
-            {(agencyFilter || starFilter || sentFilter) && <button onClick={() => { setAgency(null); setStarFilter(null); setSentFilter(null) }} className="ml-auto text-xs text-brand-400 hover:underline">Clear all</button>}
+            {selectedAgency && <button onClick={() => setAgency(null)} className="ml-auto text-xs text-brand-400 hover:underline">Clear</button>}
           </div>
 
-          {/* Cards */}
           <div>
             <p className="text-sm font-semibold text-text-primary flex items-center gap-2 mb-3">
               <MessageSquare className="w-4 h-4 text-text-muted" /> Feedback Entries
               <span className="text-xs font-normal text-text-muted">({filtered.length}{filtered.length !== items.length ? ` of ${items.length}` : ''})</span>
+              {negativeCount > 0 && <span className="text-xs text-orange-400">· ※ marks negatives</span>}
             </p>
             {!filtered.length
-              ? <div className="text-center py-8 text-sm text-text-muted glass rounded-xl">No entries match filters</div>
+              ? <div className="text-center py-8 text-sm text-text-muted glass rounded-xl">No entries match filter</div>
               : <AgencyCardList items={filtered} modelResults={modelResults} />}
+          </div>
+        </div>
+      )}
+
+      {/* ── Improvements ── */}
+      {activeSection === 'improvements' && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <Lightbulb className="w-4 h-4 text-text-muted" /> Aggregated Improvement Suggestions
+              {selectedAgency && <span className="text-xs font-normal text-text-muted">— {selectedAgency}</span>}
+            </p>
+            <p className="text-xs text-text-muted mt-0.5">Patterns across "What could be improved?" responses</p>
+          </div>
+          <div className="glass rounded-xl p-5">
+            <ImprovementThemes items={filtered} />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="glass rounded-xl p-5">
+              <p className="text-sm font-semibold text-text-primary mb-1">Word Cloud</p>
+              <p className="text-xs text-text-muted mb-3">Coloured by sentiment</p>
+              <WordCloud texts={feedbackTexts} />
+            </div>
+            <div className="glass rounded-xl p-5">
+              <p className="text-sm font-semibold text-text-primary mb-1">Top Keywords</p>
+              <p className="text-xs text-text-muted mb-4">Coloured by sentiment</p>
+              <TopKeywordsChart texts={feedbackTexts} />
+            </div>
           </div>
         </div>
       )}
@@ -1454,7 +1195,8 @@ export default function FeedbackPage() {
   return (
     <AppShell>
       <TopBar title="Feedback & Sentiment Analysis" subtitle="Citizen satisfaction · emotion detection · agency reviews" />
-      <main className="flex-1 p-6 space-y-5">
+      {/* FIX: overflow-y-auto makes this panel scrollable within the locked h-screen shell */}
+      <main className="flex-1 overflow-y-auto p-6 space-y-5 min-h-0">
         <div className="flex gap-1 p-1 bg-surface-muted rounded-xl w-fit border border-surface-border">
           <button onClick={() => setTab('reports')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'reports' ? 'bg-surface-card text-text-primary shadow-sm' : 'text-text-muted hover:text-text-secondary'}`}>
             <FileText className="w-4 h-4" /> Report Ratings
