@@ -112,7 +112,6 @@ const EMOTION_LEXICONS: Record<string, Record<string, number>> = {
     wonderful: 2, great: 2, excellent: 2, amazing: 2, fantastic: 2,
     impressed: 2, recommend: 2, commend: 2,
     nice: 1, good: 1, okay: 1, fine: 1, decent: 1, better: 1,
-    // Tagalog
     masaya: 3, natuwa: 3, nagagalak: 3, nagpapasalamat: 3,
     magaling: 2, salamat: 2, galak: 2, saya: 2, galing: 2,
     nakatulong: 2, maayos: 2, napakagaling: 3, husay: 2,
@@ -124,7 +123,6 @@ const EMOTION_LEXICONS: Record<string, Record<string, number>> = {
     unfortunate: 2, terrible: 2, horrible: 2, awful: 2, poor: 2,
     failed: 2, failure: 2, inadequate: 2, neglected: 2, abandoned: 2,
     upset: 1, down: 1, low: 1, sigh: 1, wish: 1,
-    // Tagalog
     malungkot: 3, lungkot: 2, hinagpis: 2, iyak: 2, lumbay: 2,
     napalungkot: 2, kawawa: 2, nakakalungkot: 2, lungkot_na_lungkot: 3,
     nadismaya: 2, nabigo: 2, walang_pag_asa: 3,
@@ -137,7 +135,6 @@ const EMOTION_LEXICONS: Record<string, Record<string, number>> = {
     unhelpful: 2, rude: 2, unprofessional: 2, careless: 2, unfair: 2,
     wasted: 2, wrong: 2, lied: 2, ignored: 2, disrespected: 2,
     bothered: 1, dissatisfied: 1, bad: 1, disappointed: 1,
-    // Tagalog
     galit: 3, nagalit: 3, nagagalit: 3, bwisit: 3,
     inis: 2, nakakainis: 2, bastos: 2, pangit: 2, pabaya: 2,
     tamad: 2, walang_pakialam: 2, palpak: 2, sablay: 2,
@@ -150,7 +147,6 @@ const EMOTION_LEXICONS: Record<string, Record<string, number>> = {
     worried: 2, anxious: 2, nervous: 2, concerned: 2, uncertain: 2,
     unstable: 2, risky: 2, unsafe: 2, critical: 2, severe: 2,
     unsure: 1, uneasy: 1, tense: 1, life: 1,
-    // Tagalog
     takot: 3, natakot: 3, natatakot: 3, kinakabahan: 3,
     delikado: 2, mapanganib: 2, nangangamba: 2, nag_aalala: 2,
     baka: 1, hindi_ligtas: 2, panganib: 2,
@@ -162,7 +158,6 @@ const EMOTION_LEXICONS: Record<string, Record<string, number>> = {
     unacceptable: 2, shameful: 2, appalling: 2, offensive: 2,
     deplorable: 2, pathetic: 2, useless: 2, incompetent: 2,
     bad: 1, poor: 1, mediocre: 1, inadequate: 1,
-    // Tagalog
     kadiri: 3, nakasusuklam: 3, nakakadiri: 3, nakakainis: 2,
     bastos: 2, kahiya_hiya: 3, nakakahiya: 2, walang_kwenta: 3,
     mahirap: 1, pangit: 2, palpak: 2,
@@ -174,7 +169,6 @@ const EMOTION_LEXICONS: Record<string, Record<string, number>> = {
     surprised: 2, wow: 2, remarkable: 2, impressive: 2,
     sudden: 2, quick: 2, fast: 2, instant: 2,
     interesting: 1, unusual: 1, different: 1, changed: 1,
-    // Tagalog
     gulat: 3, nagulat: 3, nagugulat: 3,
     akala: 2, biglaan: 2, bigla: 2, grabe: 2, talaga: 1,
     hindi_inaasahan: 3, hindi_akala: 2,
@@ -186,7 +180,6 @@ const EMOTION_LEXICONS: Record<string, Record<string, number>> = {
 const NEGATORS = new Set([
   'not', 'no', 'never', 'neither', 'nor', 'without', "n't",
   'hardly', 'barely', 'scarcely',
-  // Tagalog negators
   'hindi', 'huwag', 'wala', 'walang', 'di',
 ])
 
@@ -194,14 +187,12 @@ const INTENSIFIERS: Record<string, number> = {
   very: 1.5, extremely: 2.0, incredibly: 2.0, absolutely: 2.0, totally: 1.8,
   really: 1.5, so: 1.3, super: 1.5, highly: 1.5, deeply: 1.5,
   utterly: 2.0, completely: 1.8, entirely: 1.8,
-  // Tagalog intensifiers
   sobrang: 2.0, napaka: 2.0, talagang: 1.5, grabe: 1.8,
   tunay: 1.5, lubos: 1.8, totoong: 1.5,
 }
 
 const DIMINISHERS: Record<string, number> = {
   slightly: 0.5, somewhat: 0.6, kinda: 0.6, fairly: 0.7, quite: 0.8,
-  // Tagalog diminishers
   medyo: 0.5, konti: 0.4, bahagya: 0.4, parang: 0.6,
 }
 
@@ -213,7 +204,7 @@ export interface SentimentResult {
   confidence: number
   tokens:     number
   emotions:   Record<string, number>
-  language?:  DetectedLanguage   // optional on lexicon results, always set on model results
+  language?:  DetectedLanguage
 }
 
 // ─── Core analyser ────────────────────────────────────────────────────────────
@@ -290,8 +281,8 @@ export function analyseSentiment(text: string | null | undefined): SentimentResu
 }
 
 export interface TokenContribution {
-  word:    string
-  valence: number
+  word:     string
+  valence:  number
   emotions: Record<string, number>
   negated:  boolean
   modifier: number
@@ -344,17 +335,17 @@ export function computeSentiment(rating: number, feedback: string | null): Senti
 
   if (!feedback || feedback.trim().length < 3) {
     let label: SentimentLabel
-    if      (rating >= 5) label = 'joy'
-    else if (rating >= 4) label = 'positive'
+    if      (rating >= 5)  label = 'joy'
+    else if (rating >= 4)  label = 'positive'
     else if (rating === 3) label = 'neutral'
     else if (rating === 2) label = 'sadness'
     else                   label = 'anger'
     return { label, score: starScore, confidence: 0.65, tokens: 0, emotions: noEmotions }
   }
 
-  const textResult    = analyseSentiment(feedback)
+  const textResult     = analyseSentiment(feedback)
   const emotionEntries = Object.entries(textResult.emotions)
-  const topEmotion    = emotionEntries.reduce((best, curr) => curr[1] > best[1] ? curr : best, ['', 0])
+  const topEmotion     = emotionEntries.reduce((best, curr) => curr[1] > best[1] ? curr : best, ['', 0])
 
   if (topEmotion[1] >= 2.5) return { ...textResult, label: topEmotion[0] as SentimentLabel }
 
@@ -381,7 +372,6 @@ export function computeSentiment(rating: number, feedback: string | null): Senti
 
 // ─── Model-based analyser (calls FastAPI service) ────────────────────────────
 
-// ModelSentimentResult is defined in @/types — re-export for convenience
 export type { ModelSentimentResult }
 
 export async function computeSentimentWithModel(
@@ -407,7 +397,7 @@ export async function computeSentimentWithModel(
   }
 
   try {
-    const res  = await fetch('/api/analyze-sentiment', {
+    const res = await fetch('/api/analyze-sentiment', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ text: feedback.trim(), rating }),
@@ -449,39 +439,81 @@ export async function computeSentimentWithModel(
   }
 }
 
+// ─── Batch ML analyser ────────────────────────────────────────────────────────
+//
+// FIX: Previously the batch sent ALL items including rating-only rows with
+// empty text strings. The Python service errored on empty-string batches,
+// causing the entire batch to throw → catch returned lexiconFallback() →
+// serviceStatus stayed 'offline' even when the ML service was healthy.
+//
+// Now: only items with actual text (≥3 chars) are sent to the ML service.
+// Rating-only items get lexicon results. ML results are merged back into
+// their original positions so the returned array is always the same length
+// as the input and indices line up correctly.
+
 export async function computeSentimentBatch(
   items: { rating: number; feedback: string | null }[],
 ): Promise<ModelSentimentResult[]> {
-  const hasText = items.some(i => i.feedback && i.feedback.trim().length >= 3)
-
-  const lexiconFallback = () => items.map(i => {
-    const base = computeSentiment(i.rating, i.feedback)
-    const lang = i.feedback ? detectLanguage(i.feedback) : 'english' as DetectedLanguage
-    return { ...base, source: 'lexicon' as const, emotion: base.label, emotion_score: base.confidence, valence: 'neutral', valence_score: 0.5, all_emotions: [], language: lang }
-  })
-
-  // Always call the model — it uses rating even when feedback is empty.
-  // Only skip if we have no items at all.
   if (!items.length) return []
 
+  // Pre-compute lexicon result for every item — used as fallback AND as the
+  // final result for items that have no text.
+  const lexiconAll: ModelSentimentResult[] = items.map(i => {
+    const base = computeSentiment(i.rating, i.feedback)
+    const lang = i.feedback ? detectLanguage(i.feedback) : 'english' as DetectedLanguage
+    return {
+      ...base,
+      source:        'lexicon' as const,
+      emotion:       base.label,
+      emotion_score: base.confidence,
+      valence:       base.score > 0 ? 'positive' : base.score < 0 ? 'negative' : 'neutral',
+      valence_score: base.confidence,
+      all_emotions:  [],
+      language:      lang,
+    }
+  })
+
+  // Collect only indices that have meaningful text — these go to the ML service.
+  const textIndices = items
+    .map((i, idx) => ({ idx, text: i.feedback?.trim() ?? '' }))
+    .filter(x => x.text.length >= 3)
+
+  // No text at all — skip the network call entirely.
+  if (!textIndices.length) return lexiconAll
+
   try {
-    const res  = await fetch('/api/analyze-sentiment', {
+    const res = await fetch('/api/analyze-sentiment', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ items: items.map(i => ({ text: i.feedback?.trim() ?? '', rating: i.rating })) }),
+      body:    JSON.stringify({
+        items: textIndices.map(x => ({
+          text:   x.text,
+          rating: items[x.idx].rating,
+        })),
+      }),
     })
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     if (data.offline || data.error) throw new Error(data.error ?? 'offline')
 
-    return (data.results as any[]).map((r, idx) => {
-      const emotionsMap: Record<string, number> = { joy: 0, sadness: 0, anger: 0, fear: 0, disgust: 0, surprise: 0 }
+    // Merge ML results back into their original positions.
+    const merged = [...lexiconAll]
+
+    ;(data.results as any[]).forEach((r, batchIdx) => {
+      const originalIdx = textIndices[batchIdx].idx
+      const fb          = items[originalIdx].feedback
+
+      const emotionsMap: Record<string, number> = {
+        joy: 0, sadness: 0, anger: 0, fear: 0, disgust: 0, surprise: 0,
+      }
       for (const e of (r.all_emotions ?? [])) {
         if (e.label in emotionsMap) emotionsMap[e.label] = e.score
       }
-      const fb   = items[idx].feedback
+
       const lang = (r.language ?? (fb ? detectLanguage(fb) : 'english')) as DetectedLanguage
-      return {
+
+      merged[originalIdx] = {
         label:         r.label         as SentimentLabel,
         score:         r.valence_score * (r.valence === 'positive' ? 1 : -1),
         confidence:    r.confidence,
@@ -494,9 +526,12 @@ export async function computeSentimentBatch(
         valence_score: r.valence_score,
         all_emotions:  r.all_emotions ?? [],
         language:      lang,
-      } satisfies ModelSentimentResult
+      }
     })
+
+    return merged
   } catch {
-    return lexiconFallback()
+    // ML service unreachable or returned an error — full lexicon fallback.
+    return lexiconAll
   }
 }

@@ -1,0 +1,86 @@
+export async function computeSentimentBatch(
+  items: { rating: number; feedback: string | null }[],
+): Promise<ModelSentimentResult[]> {
+  if (!items.length) return []
+
+  // Pre-compute lexicon result for every item.
+  // Items with no text keep this result — only text-bearing items go to the ML service.
+  // Previously the batch sent ALL items including empty strings, which caused the
+  // Python service to error → entire batch fell back to lexicon → serviceStatus
+  // showed 'offline' even when the ML service was healthy.
+  const lexiconAll: ModelSentimentResult[] = items.map(i => {
+    const base = computeSentiment(i.rating, i.feedback)
+    const lang = i.feedback ? detectLanguage(i.feedback) : 'english' as DetectedLanguage
+    return {
+      ...base,
+      source:        'lexicon' as const,
+      emotion:       base.label,
+      emotion_score: base.confidence,
+      valence:       base.score > 0 ? 'positive' : base.score < 0 ? 'negative' : 'neutral',
+      valence_score: base.confidence,
+      all_emotions:  [],
+      language:      lang,
+    }
+  })
+
+  // Collect only the indices that have meaningful text.
+  const textIndices = items
+    .map((i, idx) => ({ idx, text: i.feedback?.trim() ?? '' }))
+    .filter(x => x.text.length >= 3)
+
+  // No text in any item — return lexicon results, skip network call.
+  if (!textIndices.length) return lexiconAll
+
+  try {
+    const res = await fetch('/api/analyze-sentiment', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        items: textIndices.map(x => ({
+          text:   x.text,
+          rating: items[x.idx].rating,
+        })),
+      }),
+    })
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data.offline || data.error) throw new Error(data.error ?? 'offline')
+
+    // Merge ML results back into their original positions.
+    // Positions without text keep their lexicon result.
+    const merged = [...lexiconAll]
+    ;(data.results as any[]).forEach((r, batchIdx) => {
+      const originalIdx = textIndices[batchIdx].idx
+      const fb          = items[originalIdx].feedback
+
+      const emotionsMap: Record<string, number> = {
+        joy: 0, sadness: 0, anger: 0, fear: 0, disgust: 0, surprise: 0,
+      }
+      for (const e of (r.all_emotions ?? [])) {
+        if (e.label in emotionsMap) emotionsMap[e.label] = e.score
+      }
+
+      const lang = (r.language ?? (fb ? detectLanguage(fb) : 'english')) as DetectedLanguage
+
+      merged[originalIdx] = {
+        label:         r.label         as SentimentLabel,
+        score:         r.valence_score * (r.valence === 'positive' ? 1 : -1),
+        confidence:    r.confidence,
+        tokens:        fb?.trim().split(/\s+/).length ?? 0,
+        emotions:      emotionsMap,
+        source:        'model'          as const,
+        emotion:       r.emotion,
+        emotion_score: r.emotion_score,
+        valence:       r.valence,
+        valence_score: r.valence_score,
+        all_emotions:  r.all_emotions ?? [],
+        language:      lang,
+      }
+    })
+
+    return merged
+  } catch {
+    return lexiconAll
+  }
+}
