@@ -31,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        {/* App-wide providers (theme, future context, etc.) */}
         <ThemeProvider>
           {children}
         </ThemeProvider>

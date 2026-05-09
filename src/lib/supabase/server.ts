@@ -10,10 +10,12 @@ export async function createClient() {
     {
       cookies: {
         getAll() {
+          // Forward existing cookies so Supabase can read the auth session.
           return cookieStore.getAll()
         },
         setAll(cookiesToSet: any[]) {
           try {
+            // Write back auth cookies for SSR requests.
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             )

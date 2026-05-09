@@ -1,4 +1,5 @@
 export default function Loading() {
+  // Simple loader while analytics charts and data load.
   return (
     <div className="flex min-h-screen bg-surface items-center justify-center">
       <div style={{ position: 'relative', width: 96, height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

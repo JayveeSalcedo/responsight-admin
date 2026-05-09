@@ -163,6 +163,7 @@ export default function IncidentMap({ reports, onSelectReport, selectedId }: Inc
       markersRef.current.forEach(m => m.remove())
       markersRef.current = []
 
+      // Filter out reports without coordinates to avoid Leaflet errors.
       const validReports = reports.filter(r => r.latitude && r.longitude)
 
       validReports.forEach(report => {
@@ -172,6 +173,7 @@ export default function IncidentMap({ reports, onSelectReport, selectedId }: Inc
         const isSelected = report.id === selectedId
 
         const sz = isSelected ? 44 : 36
+        // Use a custom div icon for emoji + severity styling.
         const icon = L.divIcon({
           className: 'leaflet-div-icon-clean',
           // total height = circle + tail(6) + label(~16)
@@ -276,6 +278,7 @@ export default function IncidentMap({ reports, onSelectReport, selectedId }: Inc
       })
 
       if (validReports.length > 0 && !selectedId) {
+        // Auto-fit the map to all visible reports when nothing is selected.
         const bounds = L.latLngBounds(validReports.map(r => [r.latitude, r.longitude] as [number, number]))
         map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 })
       }

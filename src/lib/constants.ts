@@ -1,3 +1,4 @@
+// Static lookup lists for filters and drop-downs.
 export const BARANGAYS = [
   'Anonas','Bactad East','Bayaoas','Bolaoen','Cabaruan','Cabuloan',
   'Camanang','Camantiles','Casantaan','Catablan','Cayambanan',

@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing password' }, { status: 400 })
     }
 
+    // Call DB function to produce a salted hash on the server side.
     const { data, error } = await supabaseAdmin.rpc('hash_password', { password })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     if (!data)  return NextResponse.json({ error: 'hash_password returned null — check DB function exists' }, { status: 500 })

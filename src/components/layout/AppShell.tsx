@@ -25,6 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [pathname])
 
   function handleNavigate() {
+    // Delay spinner to avoid flicker on fast navigations.
     timerRef.current = setTimeout(() => setLoading(true), 120)
   }
 
@@ -41,6 +42,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {loading && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-surface/50 backdrop-blur-[2px] pointer-events-none">
+            {/* Overlay loader while route transition is in progress. */}
             <div className="flex flex-col items-center gap-3">
               <span className="w-8 h-8 rounded-full border-[3px] border-surface-muted border-t-brand-400 animate-spin" />
             </div>

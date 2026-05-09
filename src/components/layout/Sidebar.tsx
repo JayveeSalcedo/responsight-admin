@@ -12,6 +12,7 @@ import {
   ChevronLeft, ChevronRight,
 } from 'lucide-react'
 
+// Sidebar routes and icons used for navigation.
 const nav = [
   { href: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
   { href: '/incidents',  label: 'Incidents',   icon: AlertTriangle   },
@@ -105,6 +106,7 @@ export function Sidebar({ onNavigate, onCollapse }: { onNavigate?: () => void; o
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   function toggle() {
+    // Persist collapse state so layout stays consistent between visits.
     const next = !collapsed
     setCollapsed(next)
     localStorage.setItem(COLLAPSED_KEY, String(next))

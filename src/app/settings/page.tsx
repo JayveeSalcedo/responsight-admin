@@ -74,6 +74,7 @@ function AgencyProfileSection({ onBack }: { onBack: () => void }) {
   }, [])
 
   async function fetchAgencies() {
+    // Load agencies for list + edit selectors.
     setLoading(true)
     const { data } = await supabase.from('agencies').select('*').order('created_at')
     if (data) setAgencies(data)

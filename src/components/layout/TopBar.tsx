@@ -142,6 +142,7 @@ function SearchPanel({ onClose }: { onClose: () => void }) {
     const val = e.target.value
     setQuery(val)
     clearTimeout(debounceRef.current)
+    // Debounce to avoid firing a query on every keystroke.
     debounceRef.current = setTimeout(() => search(val), 300)
   }
 

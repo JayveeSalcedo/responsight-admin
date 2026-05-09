@@ -1,3 +1,4 @@
+// Shared domain types used across UI, API routes, and analytics.
 export type IncidentSeverity = 'critical' | 'high' | 'medium' | 'low'
 export type IncidentStatus   = 'pending' | 'in_progress' | 'resolved' | 'closed'
 export type IncidentType     = 'fire' | 'flood' | 'medical' | 'crime' | 'accident' | 'other'

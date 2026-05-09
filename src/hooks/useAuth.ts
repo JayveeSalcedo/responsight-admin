@@ -16,6 +16,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Read from localStorage once on mount; no server-side session here.
     const id    = localStorage.getItem('rs_user_id')
     const email = localStorage.getItem('rs_user_email')
     const name  = localStorage.getItem('rs_user_name')
@@ -28,6 +29,7 @@ export function useAuth() {
   }, [])
 
   const signOut = () => {
+    // Clear local session + middleware cookie, then redirect to login.
     localStorage.removeItem('rs_user_id')
     localStorage.removeItem('rs_user_email')
     localStorage.removeItem('rs_user_name')

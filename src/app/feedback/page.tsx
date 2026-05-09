@@ -70,7 +70,7 @@ const STOP_WORDS = new Set([
   'the','a','an','and','or','but','in','on','at','to','for','of','with','is','was','are','were','be','been',
   'have','has','had','do','did','will','would','could','should','may','might','that','this','it','its',
   'i','me','we','our','you','your','they','their','he','she','his','her','very','so','just','also',
-  'mga','ang','ng','na','sa','ay','ko','mo','po','opo','yung','lang','din','rin','naman','pero','kasi',
+  'mga','ang','ng','na','sa','ay','ko','mo','po','opo','yung','lang','din','rin','naman','pero','kasi', 'nila'
 ])
 const TOOLTIP_STYLE = { backgroundColor: '#13161e', border: '1px solid #1e2330', borderRadius: '8px', color: '#f0f2f8', fontSize: '12px' }
 
@@ -249,6 +249,7 @@ function SentimentAnalysisPanel({ rating, feedback, modelResult }: {
 let _d3CloudReady = false
 let _d3CloudPromise: Promise<void> | null = null
 function ensureD3Cloud(): Promise<void> {
+  // Lazy-load d3 + d3-cloud only when the word cloud is needed.
   if (_d3CloudReady) return Promise.resolve()
   if (_d3CloudPromise) return _d3CloudPromise
   _d3CloudPromise = new Promise<void>((resolve, reject) => {

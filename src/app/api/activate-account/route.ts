@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Look up token ────────────────────────────────────────────────────────
+    // Read token row with expiry/used flags to validate activation.
     const { data: row, error: fetchErr } = await supabaseAdmin
       .from('activation_tokens')
       .select('user_id, expires_at, used')
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Activate the user ────────────────────────────────────────────────────
+    // Set verified flag so the account can log in.
     const { error: updateErr } = await supabaseAdmin
       .from('users')
       .update({ verified: true })

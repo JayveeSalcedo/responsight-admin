@@ -12,6 +12,7 @@ export function LoadingScreen({ done = false }: LoadingScreenProps) {
 
   useEffect(() => {
     if (done) {
+      // Fade out before removing the overlay from the DOM.
       setFading(true)
       const t = setTimeout(() => setHidden(true), 700)
       return () => clearTimeout(t)

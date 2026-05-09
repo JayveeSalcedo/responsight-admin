@@ -35,6 +35,7 @@ const ENGLISH_MARKERS = new Set([
 ])
 
 export function detectLanguage(text: string): DetectedLanguage {
+  // Tokenize once and count marker hits to keep the heuristic cheap.
   const tokens = new Set(
     text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(Boolean)
   )
@@ -217,6 +218,7 @@ export function analyseSentiment(text: string | null | undefined): SentimentResu
   if (!text || text.trim().length < 2) return empty
 
   const language = detectLanguage(text)
+  // Normalize once; keep apostrophes for contractions (e.g. "don't").
   const lower    = text.toLowerCase()
   const raw      = lower.replace(/[^\w\s']/g, ' ')
   const tokens   = raw.split(/\s+/).filter(Boolean)
@@ -226,10 +228,12 @@ export function analyseSentiment(text: string | null | undefined): SentimentResu
   let tokenCount   = 0
 
   let i = 0
+  // Walk tokens to accumulate valence + emotion contributions.
   while (i < tokens.length) {
     const tok = tokens[i]
     if (NEGATORS.has(tok)) { i++; continue }
 
+    // Look back a short window to detect negation and modifiers.
     const prev3     = tokens.slice(Math.max(0, i - 3), i)
     const isNegated = prev3.some(t => NEGATORS.has(t))
     const prev2     = tokens.slice(Math.max(0, i - 2), i)
@@ -240,6 +244,7 @@ export function analyseSentiment(text: string | null | undefined): SentimentResu
     }
 
     let scored = false
+    // Emotion scores are additive; negation flips sign before modifier.
     for (const [emotion, lexicon] of Object.entries(EMOTION_LEXICONS)) {
       const val = lexicon[tok] ?? 0
       if (val !== 0) {
@@ -264,6 +269,7 @@ export function analyseSentiment(text: string | null | undefined): SentimentResu
   const topEmotion        = emotionEntries.reduce((best, curr) => curr[1] > best[1] ? curr : best, ['', 0])
   const totalEmotionScore = emotionEntries.reduce((s, [, v]) => s + Math.max(v, 0), 0)
 
+  // Normalize valence to a bounded range for consistent thresholds.
   const normValence = Math.tanh(valenceScore / Math.max(tokenCount, 1))
   let valenceLabel: SentimentLabel
   if      (normValence >=  0.35) valenceLabel = 'positive'
@@ -274,6 +280,7 @@ export function analyseSentiment(text: string | null | undefined): SentimentResu
   if (topEmotion[1] >= 2.0) label = topEmotion[0] as SentimentLabel
   else                       label = valenceLabel
 
+  // Confidence uses both volume (tokens) and intensity (scores).
   const maxScore   = Math.max(totalEmotionScore, Math.abs(valenceScore))
   const confidence = Math.min(0.95, 0.45 + Math.min(tokenCount, 6) * 0.025 + Math.min(maxScore, 10) * 0.02)
 
@@ -295,6 +302,7 @@ export function getContributors(text: string): TokenContribution[] {
   const result: TokenContribution[] = []
 
   let i = 0
+  // Mirror the main analyzer but keep per-token outputs for debugging.
   while (i < tokens.length) {
     const tok = tokens[i]
     if (NEGATORS.has(tok)) { i++; continue }
@@ -330,10 +338,12 @@ export function getContributors(text: string): TokenContribution[] {
 // ─── Blended analyser (text + star rating) ───────────────────────────────────
 
 export function computeSentiment(rating: number, feedback: string | null): SentimentResult {
+  // Blend star rating with text sentiment so short/no-text feedback still scores.
   const starScore  = (rating - 3) * 1.5
   const noEmotions = { joy: 0, sadness: 0, anger: 0, fear: 0, disgust: 0, surprise: 0 }
 
   if (!feedback || feedback.trim().length < 3) {
+    // Use only rating when text is too short to analyze meaningfully.
     let label: SentimentLabel
     if      (rating >= 5)  label = 'joy'
     else if (rating >= 4)  label = 'positive'
@@ -347,6 +357,7 @@ export function computeSentiment(rating: number, feedback: string | null): Senti
   const emotionEntries = Object.entries(textResult.emotions)
   const topEmotion     = emotionEntries.reduce((best, curr) => curr[1] > best[1] ? curr : best, ['', 0])
 
+  // Let strong emotions override blended valence.
   if (topEmotion[1] >= 2.5) return { ...textResult, label: topEmotion[0] as SentimentLabel }
 
   const blended    = starScore * 0.35 + textResult.score * 0.65
@@ -378,10 +389,12 @@ export async function computeSentimentWithModel(
   rating: number,
   feedback: string | null,
 ): Promise<ModelSentimentResult> {
+  // Start with lexicon so we always have a usable answer.
   const lexiconBase = computeSentiment(rating, feedback)
   const lang        = feedback ? detectLanguage(feedback) : 'english'
 
   if (!feedback || feedback.trim().length < 3) {
+    // Mirror the model response shape for the UI even without the API call.
     return {
       ...lexiconBase,
       source:        'lexicon',
@@ -397,6 +410,7 @@ export async function computeSentimentWithModel(
   }
 
   try {
+    // Call API route (server-side proxy to Python service).
     const res = await fetch('/api/analyze-sentiment', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },

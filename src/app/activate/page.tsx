@@ -17,6 +17,7 @@ function ActivateContent() {
   useEffect(() => {
     if (!token) { setState('error'); setMessage('No activation token provided.'); return }
 
+    // Verify token via API and surface the result state.
     fetch('/api/activate-account', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },

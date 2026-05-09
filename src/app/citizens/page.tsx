@@ -95,6 +95,7 @@ export default function CitizensPage() {
   useEffect(() => { fetchCitizens() }, [])
 
   async function fetchCitizens() {
+    // Build a denormalized list with report counts and average ratings.
     setLoading(true)
     try {
       // Fetch all citizens

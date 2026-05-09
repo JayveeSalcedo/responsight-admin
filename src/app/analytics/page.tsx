@@ -172,6 +172,7 @@ function parseIncidentCSV(csvText: string, incidentType: IncidentType): YearData
   const lines = csvText.split('\n').map(l => l.trim()).filter(Boolean)
   if (lines.length === 0) return []
   const header = lines[0].split(',').map(c => c.trim().toUpperCase())
+  // Support datasets with a YEAR column (multi-year) or without (single-year).
   const hasYearCol = header.includes('YEAR')
 
   if (hasYearCol) {

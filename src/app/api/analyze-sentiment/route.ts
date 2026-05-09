@@ -4,6 +4,7 @@ const SENTIMENT_API  = (process.env.SENTIMENT_API_URL  ?? 'http://localhost:8000
 const HF_TOKEN       = process.env.HF_TOKEN ?? ''
 
 function hfHeaders() {
+  // Optional HF token for authenticated Spaces or rate-limit bypass.
   const h: Record<string, string> = { 'Content-Type': 'application/json' }
   if (HF_TOKEN) h['Authorization'] = `Bearer ${HF_TOKEN}`
   return h
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
     const isBatch = Array.isArray(body?.items)
     const endpoint = isBatch ? '/analyze/batch' : '/analyze'
 
+    // Pass through to the Python service (or HF Space).
     const res = await fetch(`${SENTIMENT_API}${endpoint}`, {
       method:  'POST',
       headers: hfHeaders(),

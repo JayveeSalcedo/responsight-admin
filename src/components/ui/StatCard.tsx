@@ -21,6 +21,7 @@ export function StatCard({ title, value, delta, up, icon, accent = 'purple' }: S
   return (
     <div className="glass rounded-xl p-5 animate-slide-up cursor-pointer transition-all hover:border-brand-400/50 hover:shadow-lg hover:shadow-brand-500/10 group">
       <div className="flex items-start justify-between mb-4">
+        {/* Accent color ties the card to its metric category. */}
         <div className={cn('w-10 h-10 rounded-lg border flex items-center justify-center transition-colors group-hover:text-brand-300', accents[accent])}>
           {icon}
         </div>

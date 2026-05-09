@@ -53,6 +53,7 @@ export default function AdvisoriesPage() {
 
   useEffect(() => {
     fetchAdvisories()
+    // Keep list in sync with realtime advisory updates.
     const channel = supabase
       .channel('advisories_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'advisories' }, fetchAdvisories)

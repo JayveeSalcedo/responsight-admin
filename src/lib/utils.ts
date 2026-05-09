@@ -2,10 +2,12 @@ import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
 export function cn(...inputs: ClassValue[]) {
+  // Merge conditional class names with Tailwind conflict resolution.
   return twMerge(clsx(inputs))
 }
 
 export function formatDate(dateStr: string) {
+  // Locale formatting for dashboard and table displays.
   return new Date(dateStr).toLocaleDateString('en-PH', {
     year:  'numeric',
     month: 'short',
@@ -14,6 +16,7 @@ export function formatDate(dateStr: string) {
 }
 
 export function formatTime(dateStr: string) {
+  // Keep 2-digit time for consistent alignment in lists.
   return new Date(dateStr).toLocaleTimeString('en-PH', {
     hour:   '2-digit',
     minute: '2-digit',
@@ -21,10 +24,12 @@ export function formatTime(dateStr: string) {
 }
 
 export function formatDateTime(dateStr: string) {
+  // Join date + time without repeating locale config in callers.
   return `${formatDate(dateStr)} ${formatTime(dateStr)}`
 }
 
 export function timeAgo(dateStr: string): string {
+  // Lightweight relative time for activity feeds (no extra deps).
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1)  return 'just now'

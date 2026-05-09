@@ -38,6 +38,7 @@ interface BadgeProps {
 export function Badge({ children, variant = 'default', value, className }: BadgeProps) {
   let cls = 'bg-surface-muted text-text-secondary border-surface-border'
 
+  // Choose style based on semantic meaning.
   if (variant === 'severity' && value) cls = severityMap[value as IncidentSeverity]
   if (variant === 'status'   && value) cls = statusMap[value as IncidentStatus]
   if (variant === 'sentiment'&& value) cls = sentimentMap[value as SentimentLabel]

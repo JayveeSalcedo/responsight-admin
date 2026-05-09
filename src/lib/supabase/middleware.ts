@@ -25,18 +25,21 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
+  // Fetch user once so we can gate routes without extra round trips.
   const { data: { user } } = await supabase.auth.getUser()
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login')
   const isPublic   = request.nextUrl.pathname === '/'
 
   if (!user && !isAuthPage && !isPublic) {
+    // Not signed in, redirect to login.
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
   if (user && isAuthPage) {
+    // Already signed in, skip the login page.
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

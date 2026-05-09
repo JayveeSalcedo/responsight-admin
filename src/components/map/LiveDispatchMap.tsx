@@ -263,6 +263,7 @@ export default function LiveDispatchMap({
         `
 
         if (existing.has(r.responder_id)) {
+          // Update existing marker position + popup contents.
           const marker = existing.get(r.responder_id)!
           marker.setLatLng([r.latitude, r.longitude])
           marker.setIcon(icon)
@@ -335,6 +336,7 @@ export default function LiveDispatchMap({
         `
 
         if (existing.has(inc.id)) {
+          // Update existing incident marker visuals in place.
           const marker = existing.get(inc.id)!
           marker.setIcon(icon)
           marker.getPopup()?.setContent(popupHtml)

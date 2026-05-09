@@ -9,6 +9,7 @@ const supabaseAdmin = createClient(
 )
 
 function createTransporter() {
+  // SMTP transport for transactional emails.
   return nodemailer.createTransport({
     host:   process.env.SMTP_HOST,
     port:   Number(process.env.SMTP_PORT ?? 465),

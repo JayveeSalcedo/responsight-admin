@@ -17,6 +17,7 @@ function readTheme(): Theme {
 }
 
 function applyTheme(theme: Theme) {
+  // Toggle a root class so Tailwind can switch palettes.
   document.documentElement.classList.toggle('light', theme === 'light')
 }
 

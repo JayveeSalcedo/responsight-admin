@@ -225,6 +225,7 @@ export default function DashboardPage() {
   const [selIncidentId, setSelIncidentId] = useState<string | null>(null)
 
   const fetchReports = useCallback(async () => {
+    // Fetch the latest incident cards for the dashboard list.
     let q = supabase
       .from('incident_reports')
       .select(`
@@ -358,6 +359,7 @@ export default function DashboardPage() {
   }, [session])
 
   const fetchAll = useCallback(async () => {
+    // Pull all dashboard widgets in parallel to keep load time consistent.
     setLoading(true)
     await Promise.all([fetchReports(), fetchStats(), fetchSeverity(), fetchMapData()])
     setLoading(false)

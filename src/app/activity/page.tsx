@@ -109,6 +109,7 @@ export default function ActivityLogsPage() {
     fetchLogs()
 
     // Debounce so bursts of changes (e.g. incident lifecycle) collapse into one rebuild
+    // Keeps the log list responsive without reloading on every tiny update.
     let timer: ReturnType<typeof setTimeout>
     function scheduleRefresh() {
       clearTimeout(timer)

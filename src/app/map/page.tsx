@@ -30,5 +30,6 @@ export interface ResponderLocation {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MapPage() {
+  // Map is accessed from the Incidents tab to keep routing simple.
   redirect('/incidents')
 }

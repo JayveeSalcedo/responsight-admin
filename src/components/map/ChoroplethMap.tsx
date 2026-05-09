@@ -230,6 +230,7 @@ export default function ChoroplethMap({ incidents }: Props) {
 
   const aggregatedData = useMemo(() => {
     if (!geoData || !incidents) return null
+    // Count incidents by barangay using point-in-polygon matching.
     const counts = new Map<string, { count: number; incidents: MapIncident[] }>()
     geoData.features.forEach((f: any) => { counts.set(f.properties.ADM4_EN, { count: 0, incidents: [] }) })
     incidents.forEach(inc => {

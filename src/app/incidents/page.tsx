@@ -75,6 +75,7 @@ function StatusDropdown({ reportId, current, onUpdate }: {
 
   useEffect(() => {
     if (!open) return
+    // Close dropdown on outside click to avoid stale menus.
     function handleClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
@@ -128,6 +129,7 @@ function IncidentDetailModal({
 
   useEffect(() => {
     async function load() {
+      // Fetch incident details and media in parallel for the modal view.
       const [reportRes, mediaRes] = await Promise.all([
         supabase
           .from('incident_reports')
