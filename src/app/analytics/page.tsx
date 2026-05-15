@@ -1512,6 +1512,7 @@ function InAppTab() {
   const [hotspotView, setHotspotView] = useState<'map' | 'chart'>('map')
   const [hotspotDataSource, setHotspotDataSource] = useState<'live' | 'historical'>('live')
   const [trendType, setTrendType] = useState<string | null>(null)
+  const [respTimeType, setRespTimeType] = useState<string | null>(null)
 
   const refTrend = useRef<HTMLDivElement>(null); const refType = useRef<HTMLDivElement>(null)
   const refStatus = useRef<HTMLDivElement>(null); const refRespTime = useRef<HTMLDivElement>(null)
@@ -1566,11 +1567,17 @@ function InAppTab() {
   const respTimeData = useMemo(() => {
     const start = new Date(dateRange.start); const end = new Date(dateRange.end)
     const numDays = Math.max(1, differenceInDays(end, start) + 1)
-    const withTime = allReports.filter(r => { if (r.response_time_minutes == null) return false; const d = new Date(r.created_at); return d >= startOfDay(start) && d <= endOfDay(end) })
+    const withTime = allReports.filter(r => {
+      if (r.response_time_minutes == null) return false
+      const d = new Date(r.created_at)
+      if (!(d >= startOfDay(start) && d <= endOfDay(end))) return false
+      if (respTimeType && (r.incident_type || 'other').toLowerCase() !== respTimeType) return false
+      return true
+    })
     const days = Array.from({ length: numDays }, (_, i) => { const d = addDays(startOfDay(start), i); return { date: format(d, 'MMM d'), day: format(startOfDay(d), 'yyyy-MM-dd'), sum: 0, count: 0 } })
     withTime.forEach(r => { const bucket = days.find(d => d.day === format(new Date(r.created_at), 'yyyy-MM-dd')); if (bucket) { bucket.sum += r.response_time_minutes!; bucket.count++ } })
     return days.map(d => ({ date: d.date, avg: d.count > 0 ? Math.round(d.sum / d.count * 10) / 10 : null, count: d.count }))
-  }, [allReports, dateRange])
+  }, [allReports, dateRange, respTimeType])
 
   const overallAvgRt = useMemo(() => { const valid = allReports.filter(r => r.response_time_minutes != null); if (!valid.length) return null; return Math.round(valid.reduce((s, r) => s + r.response_time_minutes!, 0) / valid.length * 10) / 10 }, [allReports])
 
@@ -1742,7 +1749,16 @@ function InAppTab() {
             </div>
             <p className="text-xs text-text-muted">Daily average minutes from acceptance → completion</p>
           </div>
-          <InsightsButton onClick={() => setModal('resptime')} />
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <select value={respTimeType ?? ''} onChange={e => setRespTimeType(e.target.value === '' ? null : e.target.value)} className="appearance-none pl-3 pr-7 py-1.5 rounded-lg text-xs font-medium border border-surface-border bg-surface-muted text-text-secondary focus:outline-none focus:border-brand-500/50">
+                <option value="">All Types</option>
+                {INCIDENT_TYPES.map(t => <option key={t} value={t}>{TYPE_LABEL[t]}</option>)}
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text-muted pointer-events-none" />
+            </div>
+            <InsightsButton onClick={() => setModal('resptime')} />
+          </div>
         </div>
         {loading ? <div className="h-64 flex items-center justify-center text-sm text-text-muted"><Loader2 className="w-4 h-4 animate-spin mr-2" />Loading…</div>
           : respTimeData.every(d => d.avg == null)
