@@ -15,10 +15,6 @@ Language detection:
   Simple heuristic using known Tagalog function words — no extra model needed.
   Labels each text as "english" | "tagalog" | "taglish"
 
-Start:
-  pip install -r requirements.txt
-  python main.py
-  # or: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 """
 
 # ══════════════════════════════════════════════════════════════════════════════

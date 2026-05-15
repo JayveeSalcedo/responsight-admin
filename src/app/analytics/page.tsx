@@ -316,7 +316,7 @@ function FocusPeriodBar({
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
 
-  // Compute presets on the client only (avoids SSR/client date mismatch → hydration error)
+ 
   const presets = useMemo((): FocusPreset[] => {
     if (!mounted) return []
     const today = new Date()
@@ -957,7 +957,7 @@ function DatasetTab() {
   const availableYears = useMemo(() => [...new Set(datasets.map(d => d.year))].sort(), [datasets])
   const availableTypes = useMemo(() => [...new Set(datasets.map(d => d.incidentType))] as IncidentType[], [datasets])
 
-  // ── Merge parsed datasets into state + upsert to Supabase ──────────────────
+
   async function addDatasets(parsed: YearDataset[]) {
     // Merge into local state
     setDatasets(prev => {
@@ -1433,7 +1433,7 @@ function DatasetTab() {
           <div>
             <h2 className="text-sm font-semibold text-text-primary">
               {isUrdaneta && hotspotView === 'map'
-                ? `Barangay Choropleth${selectedMonth !== null ? ` · ${MONTHS[selectedMonth]}` : ''}`
+                ? `Barangay Hotspots${selectedMonth !== null ? ` · ${MONTHS[selectedMonth]}` : ''}`
                 : `Top Locations by Incidents${selectedMonth !== null ? ` · ${MONTHS[selectedMonth]}` : ''}`}
             </h2>
             <p className="text-xs text-text-muted mt-0.5">

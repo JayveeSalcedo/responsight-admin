@@ -453,17 +453,6 @@ export async function computeSentimentWithModel(
   }
 }
 
-// ─── Batch ML analyser ────────────────────────────────────────────────────────
-//
-// FIX: Previously the batch sent ALL items including rating-only rows with
-// empty text strings. The Python service errored on empty-string batches,
-// causing the entire batch to throw → catch returned lexiconFallback() →
-// serviceStatus stayed 'offline' even when the ML service was healthy.
-//
-// Now: only items with actual text (≥3 chars) are sent to the ML service.
-// Rating-only items get lexicon results. ML results are merged back into
-// their original positions so the returned array is always the same length
-// as the input and indices line up correctly.
 
 export async function computeSentimentBatch(
   items: { rating: number; feedback: string | null }[],
