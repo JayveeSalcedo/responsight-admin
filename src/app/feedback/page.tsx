@@ -509,7 +509,11 @@ function TopKeywordsChart({ texts, topN = 15 }: { texts: string[]; topN?: number
         <XAxis type="number" tick={{ fill: '#4d566b', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
         <YAxis type="category" dataKey="word" width={80} tick={{ fill: '#a0aec0', fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} />
         <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: '#ffffff08' }}
-          formatter={(value: any, _: any, props: any) => [`${value} mention${value !== 1 ? 's' : ''}`, `${SENT_CFG[props.payload.sentiment as SentimentLabel].emoji} ${props.payload.word}`]} />
+          labelStyle={{ color: '#ffffff', fontWeight: 700 }} itemStyle={{ color: '#ffffff' }}
+          formatter={(value: any, _: any, props: any) => {
+            const sentiment = SENT_CFG[props.payload.sentiment as SentimentLabel]
+            return [`${value} mention${value !== 1 ? 's' : ''}`, `${sentiment.emoji} ${sentiment.label} — ${props.payload.word}`]
+          }} />
         <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={18}
           onMouseEnter={(_, i) => setActiveIndex(i)} onMouseLeave={() => setActiveIndex(null)}>
           {data.map((entry, i) => <Cell key={entry.word} fill={entry.color} opacity={activeIndex === null || activeIndex === i ? 0.85 : 0.35} />)}
