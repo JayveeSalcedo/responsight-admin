@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { AppShell } from '@/components/layout/AppShell'
 import { TopBar } from '@/components/layout/TopBar'
-import { computeSentiment, analyseSentiment, computeSentimentBatch, detectLanguage } from '@/lib/sentiment'
+import { computeSentiment, analyseSentiment, computeSentimentBatch, detectLanguage, getContributors } from '@/lib/sentiment'
 import type { SentimentLabel, ModelSentimentResult, DetectedLanguage } from '@/types'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -152,16 +152,174 @@ function parseImprovementText(feedback: string | null): { improvement: string | 
   return { improvement: lines[0], overall: lines.slice(1).join(' ') }
 }
 
+function extractTriggerWords(feedback: string | null, label: SentimentLabel): string[] {
+  if (!feedback) return []
+  const contributors = getContributors(feedback)
+  if (!contributors.length) return []
+
+  if (label === 'positive' || label === 'negative' || label === 'neutral') {
+    // For valence: return words whose valence sign matches the label
+    const want = label === 'positive' ? 1 : label === 'negative' ? -1 : 0
+    return contributors
+      .filter(c => want === 0 ? c.valence === 0 && Object.keys(c.emotions).length === 0
+                              : want > 0 ? c.valence > 0 : c.valence < 0)
+      .map(c => c.negated ? `not ${c.word}` : c.word)
+      .slice(0, 10)
+  }
+
+  // For emotion labels: return words that scored > 0 for that specific emotion
+  return contributors
+    .filter(c => (c.emotions[label] ?? 0) > 0)
+    .sort((a, b) => (b.emotions[label] ?? 0) - (a.emotions[label] ?? 0))
+    .map(c => c.negated ? `not ${c.word}` : c.word)
+    .slice(0, 10)
+}
+
 function SentimentBadge({ rating, feedback, modelResult }: { rating: number; feedback: string | null; modelResult?: ModelSentimentResult }) {
-  const sent = modelResult ?? computeSentiment(rating, feedback)
-  const cfg  = SENT_CFG[sent.label]
+  const sent    = modelResult ?? computeSentiment(rating, feedback)
+  const cfg     = SENT_CFG[sent.label]
   const isModel = modelResult?.source === 'model'
+  const [show, setShow]   = useState(false)
+  const [pos,  setPos]    = useState({ x: 0, y: 0 })
+  const timerRef          = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const triggers = useMemo(
+    () => extractTriggerWords(feedback, sent.label),
+    [feedback, sent.label]
+  )
+
+  // Also pull emotion-specific words from ML result if available
+  const mlEmotion = isModel && modelResult ? modelResult.emotion : null
+  const mlTriggers = useMemo(() => {
+    if (!mlEmotion || mlEmotion === sent.label) return []
+    return extractTriggerWords(feedback, mlEmotion as SentimentLabel)
+  }, [feedback, mlEmotion, sent.label])
+
+  const allTriggers = [...new Set([...triggers, ...mlTriggers])].slice(0, 10)
+  const hasTriggers = allTriggers.length > 0
+
+  function handleMouseEnter(e: React.MouseEvent) {
+    if (!hasTriggers) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setPos({ x: rect.left, y: rect.bottom + window.scrollY + 6 })
+    timerRef.current = setTimeout(() => setShow(true), 120)
+  }
+  function handleMouseLeave() {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    setShow(false)
+  }
+
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.bg} ${cfg.border}`} style={{ color: cfg.color }}>
-      {isModel ? <Cpu className="w-2.5 h-2.5 opacity-70" /> : <Zap className="w-2.5 h-2.5 opacity-50" />}
-      {cfg.label}
-      <span className="opacity-60">{Math.round(sent.confidence * 100)}%</span>
-    </span>
+    <>
+      <span
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-all ${
+          cfg.bg} ${cfg.border} ${hasTriggers ? 'cursor-help' : ''}`}
+        style={{ color: cfg.color }}
+      >
+        {isModel ? <Cpu className="w-2.5 h-2.5 opacity-70" /> : <Zap className="w-2.5 h-2.5 opacity-50" />}
+        {cfg.label}
+        <span className="opacity-60">{Math.round(sent.confidence * 100)}%</span>
+        {hasTriggers && <span className="opacity-40 text-[9px] ml-0.5">▾</span>}
+      </span>
+
+      {show && hasTriggers && typeof window !== 'undefined' && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{ left: pos.x, top: pos.y }}
+        >
+          <div
+            className="rounded-xl border shadow-2xl p-3 min-w-[180px] max-w-[260px]"
+            style={{
+              backgroundColor: '#13161e',
+              borderColor: cfg.color + '40',
+              boxShadow: `0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px ${cfg.color}20`,
+            }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: cfg.color }}>
+              {cfg.emoji} {cfg.label} trigger words
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {allTriggers.map(word => (
+                <span
+                  key={word}
+                  className="px-2 py-0.5 rounded-full text-[11px] font-medium border"
+                  style={{
+                    color: cfg.color,
+                    backgroundColor: cfg.color + '18',
+                    borderColor: cfg.color + '35',
+                  }}
+                >
+                  {word}
+                </span>
+              ))}
+            </div>
+            {isModel && (
+              <p className="text-[9px] text-text-muted mt-2 flex items-center gap-1">
+                <Cpu className="w-2.5 h-2.5" /> Detected by ML model · {Math.round(sent.confidence * 100)}% confidence
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ─── Emotion Row (hoverable bar inside Analysis Panel) ──────────────────────
+
+function EmotionRow({ label, score, cfg, triggers }: {
+  label: SentimentLabel
+  score: number
+  cfg: typeof SENT_CFG[SentimentLabel]
+  triggers: string[]
+}) {
+  const pct         = Math.round(score * 100)
+  const hasTriggers = triggers.length > 0
+
+  return (
+    <div className="space-y-1.5">
+      {/* Bar row */}
+      <div className="flex items-center gap-2">
+        <span className="w-20 text-[10px] capitalize flex items-center gap-1 shrink-0" style={{ color: cfg.color }}>
+          {cfg.emoji} {cfg.label}
+        </span>
+        <div className="flex-1 h-1.5 bg-surface-card rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${pct}%`, backgroundColor: cfg.color }}
+          />
+        </div>
+        <span className="text-[10px] text-text-muted w-8 text-right tabular-nums shrink-0">{pct}%</span>
+      </div>
+
+      {/* Trigger words — always visible when present */}
+      {hasTriggers && (
+        <div className="flex flex-wrap gap-1" style={{ paddingLeft: '84px' }}>
+          {triggers.map(word => (
+            <span
+              key={word}
+              className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+              style={{
+                color: cfg.color,
+                backgroundColor: cfg.color + '12',
+                borderColor: cfg.color + '30',
+              }}
+            >
+              {word}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* No triggers — explain why */}
+      {!hasTriggers && (
+        <p className="text-[10px] text-text-muted italic" style={{ paddingLeft: '84px' }}>
+          no specific keywords detected
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -228,14 +386,15 @@ function SentimentAnalysisPanel({ rating, feedback, modelResult }: {
           <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">All Emotions</p>
           {modelResult.all_emotions.filter(e => e.label in SENT_CFG).sort((a, b) => b.score - a.score).map(e => {
             const ecfg = SENT_CFG[e.label as SentimentLabel]
+            const triggers = extractTriggerWords(feedback, e.label as SentimentLabel)
             return (
-              <div key={e.label} className="flex items-center gap-2">
-                <span className="w-16 text-[10px] capitalize" style={{ color: ecfg.color }}>{ecfg.label}</span>
-                <div className="flex-1 h-1.5 bg-surface-card rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.round(e.score * 100)}%`, backgroundColor: ecfg.color }} />
-                </div>
-                <span className="text-[10px] text-text-muted w-8 text-right">{Math.round(e.score * 100)}%</span>
-              </div>
+              <EmotionRow
+                key={e.label}
+                label={e.label as SentimentLabel}
+                score={e.score}
+                cfg={ecfg}
+                triggers={triggers}
+              />
             )
           })}
         </div>
@@ -580,12 +739,10 @@ function ReportCardList({ items, modelResults }: {
                         <span className={`text-xs font-semibold ${ratingColor(fb.rating)}`}>{ratingLabel(fb.rating)}</span>
                         <SentimentBadge rating={fb.rating} feedback={fb.feedback} modelResult={modelResult} />
                         {modelResult?.language && <LanguageBadge language={modelResult.language} />}
-                        {fb.feedback && (
-                          <button onClick={() => toggle(fb.id)}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-surface-border text-text-muted hover:text-text-secondary hover:border-brand-500/40 transition-all">
-                            <Brain className="w-2.5 h-2.5" /> Analysis {expanded === fb.id ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
-                          </button>
-                        )}
+                        <button onClick={() => toggle(fb.id)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-surface-border text-text-muted hover:text-text-secondary hover:border-brand-500/40 transition-all">
+                          <Brain className="w-2.5 h-2.5" /> Analysis {expanded === fb.id ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                        </button>
                       </div>
                     </div>
                     <span className="text-[11px] text-text-muted shrink-0">{timeAgo(fb.created_at)}</span>
