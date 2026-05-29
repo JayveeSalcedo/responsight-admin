@@ -14,7 +14,7 @@ import { format, subDays, startOfDay, subWeeks, subMonths, isAfter, isBefore } f
 import {
   Star, MapPin, Shield, MessageSquare, Brain, Building2, FileText,
   ChevronDown, ChevronUp, Cpu, Zap, WifiOff, TrendingUp,
-  TrendingDown, Minus, Download, Lightbulb,
+  TrendingDown, Minus, Download, Lightbulb, X, Calendar, User, Paperclip, ExternalLink,
 } from 'lucide-react'
 import { timeAgo } from '@/lib/utils'
 
@@ -31,6 +31,13 @@ interface AgencyFeedback {
   id: string; created_at: string; rating: number; feedback: string | null; is_anonymous: boolean
   agency: string; barangay: string | null
   citizen: { first_name: string; last_name: string; barangay: string | null; zone: string | null } | null
+  // CCB-aligned fields
+  feedback_type: 'commendation' | 'complaint' | 'suggestion' | 'information_request' | null
+  ccb_status: 'received' | 'acknowledged' | 'in_review' | 'resolved' | 'closed' | null
+  acknowledged_at: string | null
+  resolved_at: string | null
+  admin_notes: string | null
+  attachment_url: string | null
 }
 
 // ─── Sentiment config ─────────────────────────────────────────────────────────
@@ -52,6 +59,25 @@ const VALENCE_LABELS:  SentimentLabel[] = ['positive', 'neutral', 'negative']
 const EMOTION_LABELS:  SentimentLabel[] = ['joy', 'sadness', 'anger', 'fear', 'disgust', 'surprise', 'panic']
 const ALL_LABELS:      SentimentLabel[] = [...VALENCE_LABELS, ...EMOTION_LABELS]
 
+// ─── CCB Config ──────────────────────────────────────────────────────────────
+
+const CCB_TYPE_CFG: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
+  commendation:        { label: 'Commendation',        icon: '👍', color: '#22c55e', bg: 'bg-green-500/10',   border: 'border-green-500/20'   },
+  complaint:           { label: 'Complaint',           icon: '⚠️', color: '#f97316', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  suggestion:          { label: 'Suggestion',          icon: '💡', color: '#facc15', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+  information_request: { label: 'Info Request',        icon: 'ℹ️', color: '#60a5fa', bg: 'bg-blue-400/10',   border: 'border-blue-400/20'   },
+}
+
+const CCB_STATUS_CFG: Record<string, { label: string; color: string; bg: string; border: string; step: number }> = {
+  received:     { label: 'Received',     color: '#94a3b8', bg: 'bg-slate-500/10',  border: 'border-slate-500/20',  step: 1 },
+  acknowledged: { label: 'Acknowledged', color: '#60a5fa', bg: 'bg-blue-400/10',   border: 'border-blue-400/20',   step: 2 },
+  in_review:    { label: 'In Review',    color: '#facc15', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', step: 3 },
+  resolved:     { label: 'Resolved',     color: '#22c55e', bg: 'bg-green-500/10',  border: 'border-green-500/20',  step: 4 },
+  closed:       { label: 'Closed',       color: '#a78bfa', bg: 'bg-violet-500/10', border: 'border-violet-500/20', step: 5 },
+}
+
+const CCB_STATUS_ORDER = ['received', 'acknowledged', 'in_review', 'resolved', 'closed']
+
 const AGENCY_CFG: Record<string, { color: string; bg: string; logo: string }> = {
   CDRRMO: { color: '#4A90E2', bg: 'bg-blue-500/10',   logo: '/images/CDRRMO.png' },
   BFP:    { color: '#7c3aed', bg: 'bg-violet-500/10', logo: '/images/BFP.png'    },
@@ -66,6 +92,112 @@ const SEVERITY_PILL: Record<string, string> = {
   urgent: 'bg-violet-600/20 text-violet-300 border-violet-600/30',
 }
 const INCIDENT_ICONS: Record<string, string> = { fire: '🔥', flood: '🌊', accident: '🚗', medical: '🏥', crime: '🚨', other: '⚠️' }
+// ─── CCB Components ──────────────────────────────────────────────────────────
+
+function CcbTypeBadge({ type }: { type: string | null }) {
+  if (!type) return null
+  const cfg = CCB_TYPE_CFG[type]
+  if (!cfg) return null
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.bg} ${cfg.border}`} style={{ color: cfg.color }}>
+      {cfg.icon} {cfg.label}
+    </span>
+  )
+}
+
+function CcbStatusBadge({ status }: { status: string | null }) {
+  if (!status) return null
+  const cfg = CCB_STATUS_CFG[status]
+  if (!cfg) return null
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${cfg.bg} ${cfg.border}`} style={{ color: cfg.color }}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
+      {cfg.label}
+    </span>
+  )
+}
+
+function CcbStatusStepper({ status }: { status: string | null }) {
+  const current = status ?? 'received'
+  const currentStep = CCB_STATUS_CFG[current]?.step ?? 1
+  return (
+    <div className="flex items-center gap-1">
+      {CCB_STATUS_ORDER.map((s, i) => {
+        const cfg  = CCB_STATUS_CFG[s]
+        const done = cfg.step <= currentStep
+        const active = s === current
+        return (
+          <div key={s} className="flex items-center gap-1">
+            <div
+              className={`w-2 h-2 rounded-full transition-all ${
+                active  ? 'ring-2 ring-offset-1 ring-offset-surface-card' : ''
+              }`}
+              style={{
+                backgroundColor: done ? cfg.color : '#1e2330',
+                border: `1px solid ${done ? cfg.color : '#2d3545'}`,
+              }}
+            />
+            {i < CCB_STATUS_ORDER.length - 1 && (
+              <div className="w-4 h-px" style={{ backgroundColor: done && i < currentStep - 1 ? cfg.color : '#2d3545' }} />
+            )}
+          </div>
+        )
+      })}
+      <span className="ml-1 text-[10px] font-medium" style={{ color: CCB_STATUS_CFG[current]?.color ?? '#94a3b8' }}>
+        {CCB_STATUS_CFG[current]?.label}
+      </span>
+    </div>
+  )
+}
+
+function CcbStatusDropdown({ feedbackId, current, onUpdate }: {
+  feedbackId: string
+  current: string | null
+  onUpdate: (id: string, status: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const next = CCB_STATUS_ORDER.filter(s => s !== current)
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        className="flex items-center gap-1 text-[11px] text-brand-400 hover:text-brand-300 transition-colors px-2 py-1 rounded border border-brand-500/20 hover:bg-brand-500/10"
+      >
+        Update <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 w-40 glass rounded-lg overflow-hidden z-50 shadow-xl border border-surface-border">
+          {next.map(s => {
+            const cfg = CCB_STATUS_CFG[s]
+            return (
+              <button
+                key={s}
+                onClick={e => { e.stopPropagation(); onUpdate(feedbackId, s); setOpen(false) }}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-surface-muted transition-colors flex items-center gap-2"
+                style={{ color: cfg.color }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
+                {cfg.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const STOP_WORDS = new Set([
   'the','a','an','and','or','but','in','on','at','to','for','of','with','is','was','are','were','be','been',
   'have','has','had','do','did','will','would','could','should','may','might','that','this','it','its',
@@ -710,7 +842,8 @@ function ReportCardList({ items, modelResults }: {
         const negative    = isNegative(fb.rating, fb.sentiment)
 
         return (
-          <div key={fb.id} className={`glass rounded-xl overflow-hidden border ${negative ? 'border-orange-500/40' : 'border-surface-border'}`}>
+          <div key={fb.id}
+            className={`glass rounded-xl overflow-hidden border hover:border-brand-500/30 transition-all ${negative ? 'border-orange-500/40' : 'border-surface-border'}`}>
             {/* severity/negativity top bar */}
             <div className={`h-1 w-full ${fb.report ? SEVERITY_BAR[fb.report.severity] ?? 'bg-surface-muted' : negative ? 'bg-orange-500' : 'bg-surface-muted'}`} />
 
@@ -806,13 +939,219 @@ function ReportCardList({ items, modelResults }: {
   )
 }
 
+// ─── Agency Feedback Modal ───────────────────────────────────────────────────
+
+function AgencyFeedbackModal({ fb, modelResult, onClose, onUpdateCcbStatus }: {
+  fb: AgencyFeedback & { sentiment: ReturnType<typeof computeSentiment> }
+  modelResult?: ModelSentimentResult
+  onClose: () => void
+  onUpdateCcbStatus: (id: string, status: string) => void
+}) {
+  const cfg      = AGENCY_CFG[fb.agency] ?? { color: '#888', bg: 'bg-surface-muted', logo: '' }
+  const negative = isNegative(fb.rating, fb.sentiment)
+  const { improvement, overall } = parseImprovementText(fb.feedback)
+  const daysSince = Math.floor((Date.now() - new Date(fb.created_at).getTime()) / 86400000)
+
+  return (
+    <div className="fixed inset-0 z-[900] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-surface-card border border-surface-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+        {/* colour bar */}
+        <div className="h-1 w-full shrink-0" style={{ backgroundColor: negative ? '#f97316' : cfg.color }} />
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-surface-border shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl ${cfg.bg} flex items-center justify-center overflow-hidden p-1.5 shrink-0`}>
+              {cfg.logo
+                ? <img src={cfg.logo} alt={fb.agency} className="w-full h-full object-contain" />
+                : <Building2 className="w-5 h-5" style={{ color: cfg.color }} />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-bold text-text-primary">{fb.agency}</span>
+                <CcbTypeBadge type={fb.feedback_type} />
+                {negative && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/10 border border-orange-500/20 text-orange-400">※ Negative</span>
+                )}
+              </div>
+              <p className="text-[11px] text-text-muted mt-0.5">
+                {fb.is_anonymous ? 'Anonymous' : fb.citizen ? `${fb.citizen.first_name} ${fb.citizen.last_name}` : 'Unknown'}
+                {!fb.is_anonymous && (fb.citizen?.barangay || fb.barangay) && ` · Brgy. ${fb.citizen?.barangay ?? fb.barangay}`}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-surface-muted flex items-center justify-center transition-colors shrink-0">
+            <X className="w-4 h-4 text-text-muted" />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+
+          {/* Rating + sentiment */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <StarRow rating={fb.rating} size="lg" />
+              <span className={`text-base font-bold ${ratingColor(fb.rating)}`}>{ratingLabel(fb.rating)}</span>
+            </div>
+            <SentimentBadge rating={fb.rating} feedback={fb.feedback} modelResult={modelResult} />
+            {modelResult?.language && <LanguageBadge language={modelResult.language} />}
+          </div>
+
+          {/* CCB Status stepper */}
+          <div className="glass rounded-xl p-4 space-y-3">
+            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">CCB Resolution Status</p>
+            <div className="flex items-center gap-1 flex-wrap">
+              {CCB_STATUS_ORDER.map((s, i) => {
+                const scfg = CCB_STATUS_CFG[s]
+                const currentStep = CCB_STATUS_CFG[fb.ccb_status ?? 'received']?.step ?? 1
+                const done   = scfg.step <= currentStep
+                const active = s === (fb.ccb_status ?? 'received')
+                return (
+                  <div key={s} className="flex items-center gap-1">
+                    <div className="flex flex-col items-center gap-1">
+                      <div
+                        className="w-3 h-3 rounded-full transition-all"
+                        style={{
+                          backgroundColor: done ? scfg.color : '#1e2330',
+                          border: `2px solid ${done ? scfg.color : '#2d3545'}`,
+                          boxShadow: active ? `0 0 0 3px ${scfg.color}30` : 'none',
+                        }}
+                      />
+                      <span className="text-[9px] font-medium" style={{ color: active ? scfg.color : '#4d566b' }}>
+                        {scfg.label}
+                      </span>
+                    </div>
+                    {i < CCB_STATUS_ORDER.length - 1 && (
+                      <div className="w-8 h-px mb-4" style={{ backgroundColor: done && i < currentStep - 1 ? scfg.color : '#2d3545' }} />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-text-muted">Update to:</span>
+              {CCB_STATUS_ORDER.filter(s => s !== fb.ccb_status).map(s => {
+                const scfg = CCB_STATUS_CFG[s]
+                return (
+                  <button key={s} onClick={() => { onUpdateCcbStatus(fb.id, s); onClose() }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all hover:opacity-80"
+                    style={{ color: scfg.color, borderColor: scfg.color + '40', backgroundColor: scfg.color + '12' }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: scfg.color }} />
+                    {scfg.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Meta row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-surface-muted border border-surface-border rounded-lg p-3">
+              <p className="text-[10px] text-text-muted font-medium mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> Submitted</p>
+              <p className="text-xs text-text-primary">{format(new Date(fb.created_at), 'MMM d, yyyy · h:mm a')}</p>
+              <p className="text-[10px] text-text-muted mt-0.5">{daysSince} day{daysSince !== 1 ? 's' : ''} ago</p>
+            </div>
+            <div className="bg-surface-muted border border-surface-border rounded-lg p-3">
+              <p className="text-[10px] text-text-muted font-medium mb-1 flex items-center gap-1"><User className="w-3 h-3" /> Citizen</p>
+              <p className="text-xs text-text-primary font-semibold">
+                {fb.is_anonymous ? 'Anonymous' : fb.citizen ? `${fb.citizen.first_name} ${fb.citizen.last_name}` : 'Unknown'}
+              </p>
+              {!fb.is_anonymous && (fb.citizen?.barangay || fb.barangay) && (
+                <p className="text-[10px] text-text-muted">Brgy. {fb.citizen?.barangay ?? fb.barangay}</p>
+              )}
+            </div>
+          </div>
+
+          {/* Feedback text */}
+          {(improvement || overall) && (
+            <div className="space-y-3">
+              {improvement && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-orange-500/5 border border-orange-500/15">
+                  <span className="text-orange-400 text-xs mt-0.5 shrink-0">⚠️</span>
+                  <div>
+                    <p className="text-[10px] font-semibold text-orange-400 uppercase tracking-wider mb-1">What could be improved</p>
+                    <p className="text-sm text-text-primary leading-relaxed">{improvement}</p>
+                  </div>
+                </div>
+              )}
+              {overall && (
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-surface-muted border border-surface-border">
+                  <MessageSquare className="w-3.5 h-3.5 text-text-muted mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Experience</p>
+                    <p className="text-sm text-text-primary leading-relaxed">{overall}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sentiment analysis */}
+          <div>
+            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-2">Sentiment Analysis</p>
+            <SentimentAnalysisPanel rating={fb.rating} feedback={fb.feedback} modelResult={modelResult} />
+          </div>
+
+          {/* Attachment */}
+          {fb.attachment_url && (
+            <div>
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-2 flex items-center gap-1">
+                <Paperclip className="w-3.5 h-3.5" /> Attachment
+              </p>
+              <a href={fb.attachment_url} target="_blank" rel="noopener noreferrer" className="group block relative rounded-xl overflow-hidden border border-surface-border hover:border-brand-500/40 transition-all">
+                <img src={fb.attachment_url} alt="attachment" className="w-full max-h-64 object-cover" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                  <span className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 text-white text-xs font-semibold bg-black/50 px-3 py-1.5 rounded-full transition-all">
+                    <ExternalLink className="w-3 h-3" /> Open full image
+                  </span>
+                </div>
+              </a>
+            </div>
+          )}
+
+          {/* Timestamps */}
+          {(fb.acknowledged_at || fb.resolved_at) && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider">Timeline</p>
+              {[
+                { label: 'Submitted',     ts: fb.created_at,       color: '#94a3b8' },
+                { label: 'Acknowledged', ts: fb.acknowledged_at,  color: '#60a5fa' },
+                { label: 'Resolved',     ts: fb.resolved_at,      color: '#22c55e' },
+              ].filter(t => t.ts).map(t => (
+                <div key={t.label} className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                  <span className="text-[11px] text-text-muted w-24 shrink-0">{t.label}</span>
+                  <span className="text-[11px] text-text-primary">{format(new Date(t.ts!), 'MMM d, yyyy · h:mm a')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-3 border-t border-surface-border flex items-center justify-between shrink-0">
+          <span className="text-[11px] text-text-muted">ID: {fb.id.substring(0, 8).toUpperCase()}</span>
+          <button onClick={onClose} className="px-4 py-1.5 rounded-lg text-xs font-medium bg-surface-muted border border-surface-border text-text-secondary hover:text-text-primary transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Agency Card List (all feedback, negatives highlighted) ──────────────────
 
-function AgencyCardList({ items, modelResults }: {
+function AgencyCardList({ items, modelResults, onUpdateCcbStatus }: {
   items: (AgencyFeedback & { sentiment: ReturnType<typeof computeSentiment> })[]
   modelResults?: Map<string, ModelSentimentResult>
+  onUpdateCcbStatus: (id: string, status: string) => void
 }) {
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [expanded, setExpanded]   = useState<string | null>(null)
+  const [modalItem, setModalItem] = useState<typeof items[0] | null>(null)
   const toggle = (id: string) => setExpanded(prev => prev === id ? null : id)
 
   return (
@@ -852,6 +1191,7 @@ function AgencyCardList({ items, modelResults }: {
                           {cfg.logo ? <img src={cfg.logo} alt={fb.agency} className="w-3.5 h-3.5 object-contain" /> : <Building2 className="w-2.5 h-2.5" />}
                           {fb.agency}
                         </span>
+                        <CcbTypeBadge type={fb.feedback_type} />
                       </div>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <StarRow rating={fb.rating} />
@@ -864,6 +1204,11 @@ function AgencyCardList({ items, modelResults }: {
                             <Brain className="w-2.5 h-2.5" /> Analysis {expanded === fb.id ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
                           </button>
                         )}
+                      </div>
+                      {/* CCB Status Row */}
+                      <div className="flex items-center gap-3 mt-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                        <CcbStatusStepper status={fb.ccb_status} />
+                        <CcbStatusDropdown feedbackId={fb.id} current={fb.ccb_status} onUpdate={onUpdateCcbStatus} />
                       </div>
                     </div>
                     <span className="text-[11px] text-text-muted shrink-0">{timeAgo(fb.created_at)}</span>
@@ -893,6 +1238,15 @@ function AgencyCardList({ items, modelResults }: {
                   })()}
 
                   {expanded === fb.id && <SentimentAnalysisPanel rating={fb.rating} feedback={fb.feedback} modelResult={modelResult} />}
+
+                  {/* CCB Attachment */}
+                  {fb.attachment_url && (
+                    <a href={fb.attachment_url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-muted border border-surface-border hover:border-brand-500/40 transition-all w-fit">
+                      <img src={fb.attachment_url} alt="attachment" className="w-10 h-10 rounded object-cover shrink-0" />
+                      <span className="text-[11px] text-text-secondary">View attachment</span>
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -1150,18 +1504,23 @@ function AgencyFeedbackTab() {
 
   useEffect(() => { fetchAgency() }, [])
 
+  async function updateCcbStatus(id: string, status: string) {
+    await supabase.from('agency_feedback').update({ ccb_status: status }).eq('id', id)
+    fetchAgency()
+  }
+
   async function fetchAgency() {
     setLoading(true)
     try {
       const { data: raw, error } = await supabase
         .from('agency_feedback')
-        .select('id, created_at, rating, feedback, is_anonymous, agency, barangay, citizen_id')
+        .select('id, created_at, rating, feedback, is_anonymous, agency, barangay, citizen_id, feedback_type, ccb_status, acknowledged_at, resolved_at, admin_notes, attachment_url')
         .order('created_at', { ascending: false }).limit(200)
       if (error || !raw?.length) { setLoading(false); setServiceStatus('offline'); return }
       const cIds = [...new Set(raw.map(r => r.citizen_id).filter(Boolean))]
       const { data: users } = cIds.length ? await supabase.from('users').select('id,first_name,last_name,barangay,zone').in('id', cIds) : { data: [] }
       const cM = Object.fromEntries((users ?? []).map((u: any) => [u.id, u]))
-      const loaded = raw.map(r => ({ ...r, is_anonymous: r.is_anonymous ?? false, citizen: cM[r.citizen_id] ?? null })) as any
+      const loaded = raw.map(r => ({ ...r, is_anonymous: r.is_anonymous ?? false, citizen: cM[r.citizen_id] ?? null, feedback_type: r.feedback_type ?? null, ccb_status: r.ccb_status ?? 'received', acknowledged_at: r.acknowledged_at ?? null, resolved_at: r.resolved_at ?? null, admin_notes: r.admin_notes ?? null, attachment_url: r.attachment_url ?? null })) as any
       setItems(loaded)
       setLoading(false)
 
@@ -1210,6 +1569,10 @@ function AgencyFeedbackTab() {
     })))
   }
 
+  // CCB compliance counts
+  const overdueAck     = items.filter(r => r.ccb_status === 'received' && Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86400000) > 3).length
+  const overdueResolve = items.filter(r => !['resolved','closed'].includes(r.ccb_status ?? '') && Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86400000) > 7).length
+
   if (loading) return <div className="text-center py-16 text-sm text-text-muted animate-pulse">Loading agency feedback…</div>
   if (!items.length) return (
     <div className="text-center py-16 text-sm text-text-muted glass rounded-xl">
@@ -1226,7 +1589,17 @@ function AgencyFeedbackTab() {
           <ServiceStatusBadge status={serviceStatus} />
           {negativeCount > 0 && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-orange-500/10 border border-orange-500/20 text-orange-400">
-              ※ {negativeCount} negative feedback{negativeCount !== 1 ? 's' : ''}
+              ※ {negativeCount} negative
+            </span>
+          )}
+          {overdueAck > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-red-500/10 border border-red-500/20 text-red-400">
+              🔴 {overdueAck} overdue acknowledgement
+            </span>
+          )}
+          {overdueResolve > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-red-500/10 border border-red-500/20 text-red-400">
+              🔴 {overdueResolve} overdue resolution
             </span>
           )}
         </div>
@@ -1313,7 +1686,7 @@ function AgencyFeedbackTab() {
             </p>
             {!filtered.length
               ? <div className="text-center py-8 text-sm text-text-muted glass rounded-xl">No entries match filter</div>
-              : <AgencyCardList items={filtered} modelResults={modelResults} />}
+              : <AgencyCardList items={filtered} modelResults={modelResults} onUpdateCcbStatus={updateCcbStatus} />}
           </div>
         </div>
       )}
